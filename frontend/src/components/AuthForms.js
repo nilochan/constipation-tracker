@@ -88,10 +88,10 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-6">
       <div className="bg-white rounded-xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="text-center mb-4">
             <span className="text-4xl">🐰</span>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Pinko's Health Tracker
+            <h1 className="text-2xl font-bold text-gray-800 mt-2">
+              Constipation Relief Tracker
             </h1>
           </div>
           <p className="text-gray-600">
