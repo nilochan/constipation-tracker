@@ -117,6 +117,45 @@ class ApiService {
     return this.request(`/analytics/${days}`);
   }
 
+  // Daily Notes API
+  async addDailyNote(date, note) {
+    return this.request(`/data/${date}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+  }
+
+  async deleteDailyNote(date, noteId) {
+    return this.request(`/data/${date}/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Profile API
+  async getProfile() {
+    return this.request('/profile');
+  }
+
+  async updateProfile(profileData) {
+    return this.request('/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async exportData() {
+    const response = await fetch(`${API_BASE_URL}/profile/export`, {
+      headers: this.getHeaders(),
+    });
+    
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Export failed');
+    }
+    
+    return response.blob();
+  }
+
   isAuthenticated() {
     return !!this.token;
   }

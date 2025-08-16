@@ -123,6 +123,7 @@ app.post('/api/login', [
 // Protected routes
 app.use('/api/data', authenticateToken);
 app.use('/api/analytics', authenticateToken);
+app.use('/api/profile', authenticateToken);
 
 // Get daily data
 app.get('/api/data/:date', async (req, res) => {
@@ -133,6 +134,12 @@ app.get('/api/data/:date', async (req, res) => {
     // Get daily data
     const dailyData = await db.get(
       'SELECT * FROM daily_data WHERE user_id = ? AND date = ?',
+      [userId, date]
+    );
+
+    // Get daily notes
+    const dailyNotes = await db.all(
+      'SELECT * FROM daily_notes WHERE user_id = ? AND date = ? ORDER BY created_at',
       [userId, date]
     );
 
@@ -174,6 +181,11 @@ app.get('/api/data/:date', async (req, res) => {
       stressLevel: dailyData?.stress_level || null,
       sleepQuality: dailyData?.sleep_quality || null,
       notes: dailyData?.notes || '',
+      dailyNotes: dailyNotes.map(note => ({
+        id: note.id,
+        note: note.note,
+        createdAt: note.created_at
+      })),
       bowelMovements: bowelMovements.map(bm => ({
         id: bm.id,
         date: bm.date,
@@ -315,6 +327,47 @@ app.delete('/api/data/:date/bowel-movements/:id', async (req, res) => {
   }
 });
 
+// Add daily note
+app.post('/api/data/:date/notes', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const userId = req.user.userId;
+    const { note } = req.body;
+
+    if (!note || note.trim() === '') {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    const result = await db.run(`
+      INSERT INTO daily_notes (user_id, date, note)
+      VALUES (?, ?, ?)
+    `, [userId, date, note.trim()]);
+
+    res.status(201).json({
+      id: result.id,
+      note: note.trim(),
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Add daily note error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete daily note
+app.delete('/api/data/:date/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    await db.run('DELETE FROM daily_notes WHERE id = ? AND user_id = ?', [id, userId]);
+    res.json({ message: 'Note deleted successfully' });
+  } catch (error) {
+    console.error('Delete daily note error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Add meal
 app.post('/api/data/:date/meals', async (req, res) => {
   try {
@@ -386,6 +439,81 @@ app.get('/api/analytics/:days', async (req, res) => {
     });
   } catch (error) {
     console.error('Analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Profile management
+app.get('/api/profile', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const user = await db.get('SELECT id, username, email, created_at FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/profile', [
+  body('email').optional().isEmail().normalizeEmail()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = req.user.userId;
+    const { email } = req.body;
+
+    await db.run('UPDATE users SET email = ? WHERE id = ?', [email, userId]);
+    
+    const updatedUser = await db.get('SELECT id, username, email, created_at FROM users WHERE id = ?', [userId]);
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Export user data
+app.get('/api/profile/export', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Get user info
+    const user = await db.get('SELECT username, email, created_at FROM users WHERE id = ?', [userId]);
+    
+    // Get all user data
+    const dailyData = await db.all('SELECT * FROM daily_data WHERE user_id = ? ORDER BY date', [userId]);
+    const bowelMovements = await db.all('SELECT * FROM bowel_movements WHERE user_id = ? ORDER BY date, time', [userId]);
+    const meals = await db.all('SELECT * FROM meals WHERE user_id = ? ORDER BY date', [userId]);
+    const symptoms = await db.all('SELECT * FROM symptoms WHERE user_id = ? ORDER BY date', [userId]);
+    const dailyNotes = await db.all('SELECT * FROM daily_notes WHERE user_id = ? ORDER BY date, created_at', [userId]);
+
+    const exportData = {
+      user,
+      exportDate: new Date().toISOString(),
+      data: {
+        dailyData,
+        bowelMovements,
+        meals,
+        symptoms,
+        dailyNotes
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${user.username}_health_data_${new Date().toISOString().split('T')[0]}.json"`);
+    res.json(exportData);
+  } catch (error) {
+    console.error('Export data error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

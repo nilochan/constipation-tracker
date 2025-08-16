@@ -14,16 +14,84 @@ const ConstipationReliefTracker = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [showBowelModal, setShowBowelModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
+  const [currentNote, setCurrentNote] = useState('');
+  const [profileData, setProfileData] = useState(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileEmail, setProfileEmail] = useState('');
 
-  // Bristol Stool Scale definitions
+  // Bristol Stool Scale definitions with visual icons
   const bristolScale = [
-    { type: 1, name: "Separate hard lumps", description: "Like nuts (hard to pass)", color: "bg-red-100 border-red-300", severity: "Severe Constipation" },
-    { type: 2, name: "Sausage-shaped but lumpy", description: "Hard and lumpy", color: "bg-orange-100 border-orange-300", severity: "Mild Constipation" },
-    { type: 3, name: "Sausage-shaped with cracks", description: "Like a sausage but with cracks on surface", color: "bg-yellow-100 border-yellow-300", severity: "Normal" },
-    { type: 4, name: "Smooth and soft", description: "Like a sausage or snake, smooth and soft", color: "bg-green-100 border-green-300", severity: "Normal" },
-    { type: 5, name: "Soft blobs with clear edges", description: "Soft blobs with clear-cut edges", color: "bg-blue-100 border-blue-300", severity: "Lacking Fiber" },
-    { type: 6, name: "Fluffy pieces with ragged edges", description: "Fluffy pieces with ragged edges, mushy", color: "bg-purple-100 border-purple-300", severity: "Mild Diarrhea" },
-    { type: 7, name: "Watery, no solid pieces", description: "Entirely liquid", color: "bg-red-100 border-red-300", severity: "Severe Diarrhea" }
+    { 
+      type: 1, 
+      name: "Separate hard lumps", 
+      description: "Like nuts (hard to pass)", 
+      color: "bg-red-100 border-red-300", 
+      severity: "Severe Constipation",
+      icon: "🟤🟤🟤", // Small separate pieces
+      emoji: "🔴",
+      severityColor: "text-red-600"
+    },
+    { 
+      type: 2, 
+      name: "Sausage-shaped but lumpy", 
+      description: "Hard and lumpy", 
+      color: "bg-orange-100 border-orange-300", 
+      severity: "Mild Constipation",
+      icon: "🌭", // Sausage-like
+      emoji: "🟠",
+      severityColor: "text-orange-600"
+    },
+    { 
+      type: 3, 
+      name: "Sausage-shaped with cracks", 
+      description: "Like a sausage but with cracks on surface", 
+      color: "bg-yellow-100 border-yellow-300", 
+      severity: "Normal",
+      icon: "🥖", // Bread/sausage with cracks
+      emoji: "🟡",
+      severityColor: "text-yellow-600"
+    },
+    { 
+      type: 4, 
+      name: "Smooth and soft", 
+      description: "Like a sausage or snake, smooth and soft", 
+      color: "bg-green-100 border-green-300", 
+      severity: "Normal",
+      icon: "🌭", // Smooth sausage
+      emoji: "🟢",
+      severityColor: "text-green-600"
+    },
+    { 
+      type: 5, 
+      name: "Soft blobs with clear edges", 
+      description: "Soft blobs with clear-cut edges", 
+      color: "bg-blue-100 border-blue-300", 
+      severity: "Lacking Fiber",
+      icon: "⚫⚫⚫", // Blob shapes
+      emoji: "🔵",
+      severityColor: "text-blue-600"
+    },
+    { 
+      type: 6, 
+      name: "Fluffy pieces with ragged edges", 
+      description: "Fluffy pieces with ragged edges, mushy", 
+      color: "bg-purple-100 border-purple-300", 
+      severity: "Mild Diarrhea",
+      icon: "💭💭", // Cloud-like fluffy
+      emoji: "🟣",
+      severityColor: "text-purple-600"
+    },
+    { 
+      type: 7, 
+      name: "Watery, no solid pieces", 
+      description: "Entirely liquid", 
+      color: "bg-red-100 border-red-300", 
+      severity: "Severe Diarrhea",
+      icon: "💧💧💧", // Water drops
+      emoji: "🔴",
+      severityColor: "text-red-600"
+    }
   ];
 
   // Initialize daily data structure
@@ -33,6 +101,7 @@ const ConstipationReliefTracker = () => {
     checkedItems: {},
     bowelMovement: false,
     notes: '',
+    dailyNotes: [], // Array for multiple notes per day
     bowelMovements: [],
     mood: null,
     stressLevel: null,
@@ -86,6 +155,13 @@ const ConstipationReliefTracker = () => {
       loadDailyData(currentDate);
     }
   }, [currentDate, isAuthenticated, loadDailyData]);
+
+  // Load profile when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadProfile();
+    }
+  }, [isAuthenticated]);
 
   // Load analytics data when switching to analytics tab
   useEffect(() => {
@@ -278,6 +354,82 @@ const ConstipationReliefTracker = () => {
     }
   };
 
+  // Daily notes functions
+  const addDailyNote = async () => {
+    if (!currentNote.trim()) return;
+
+    try {
+      const newNote = await ApiService.addDailyNote(currentDate, currentNote.trim());
+      const updatedNotes = [...(currentData.dailyNotes || []), newNote];
+      setDailyData(prev => ({
+        ...prev,
+        [currentDate]: {
+          ...currentData,
+          dailyNotes: updatedNotes
+        }
+      }));
+      setCurrentNote('');
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+    } catch (error) {
+      console.error('Failed to add daily note:', error);
+    }
+  };
+
+  const deleteDailyNote = async (noteId) => {
+    try {
+      await ApiService.deleteDailyNote(currentDate, noteId);
+      const updatedNotes = (currentData.dailyNotes || []).filter(note => note.id !== noteId);
+      setDailyData(prev => ({
+        ...prev,
+        [currentDate]: {
+          ...currentData,
+          dailyNotes: updatedNotes
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to delete daily note:', error);
+    }
+  };
+
+  // Profile functions
+  const loadProfile = async () => {
+    try {
+      const profile = await ApiService.getProfile();
+      setProfileData(profile);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    }
+  };
+
+  const updateProfile = async (updates) => {
+    try {
+      const updated = await ApiService.updateProfile(updates);
+      setProfileData(updated);
+      setUser(updated);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+    }
+  };
+
+  const exportData = async () => {
+    try {
+      const blob = await ApiService.exportData();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `health_data_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   const getWaterStatus = (glasses) => {
     if (glasses >= 8) return { color: 'text-green-600', message: 'Excellent hydration!' };
     if (glasses >= 6) return { color: 'text-blue-600', message: 'Good progress' };
@@ -404,24 +556,36 @@ const ConstipationReliefTracker = () => {
                   <div
                     key={scale.type}
                     onClick={() => setSelectedBristol(scale.type)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
                       selectedBristol === scale.type 
-                        ? `${scale.color} border-blue-500` 
-                        : `${scale.color} hover:border-gray-400`
+                        ? `${scale.color} border-blue-500 shadow-lg` 
+                        : `${scale.color} hover:border-gray-400 hover:shadow-md`
                     }`}
                   >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="font-medium">Type {scale.type}: {scale.name}</span>
-                        <div className="text-sm text-gray-600">{scale.description}</div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                          <span className="text-2xl">{scale.icon}</span>
+                        </div>
                       </div>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        scale.type <= 2 ? 'bg-red-100 text-red-800' :
-                        scale.type <= 4 ? 'bg-green-100 text-green-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {scale.severity}
-                      </span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-gray-800">Type {scale.type}</span>
+                          <span className="text-xl">{scale.emoji}</span>
+                          <span className="font-medium text-gray-700">{scale.name}</span>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">{scale.description}</div>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${scale.severityColor} bg-white/50`}>
+                          {scale.severity}
+                        </span>
+                      </div>
+                      {selectedBristol === scale.type && (
+                        <div className="flex-shrink-0">
+                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-sm">✓</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -667,12 +831,11 @@ const ConstipationReliefTracker = () => {
             </div>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => setActiveTab('profile')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                  activeTab === 'profile' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                onClick={() => {
+                  setShowProfileModal(true);
+                  setProfileEmail(user?.email || '');
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-100"
               >
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
                   {(user?.username || 'U').charAt(0).toUpperCase()}
@@ -727,16 +890,6 @@ const ConstipationReliefTracker = () => {
             }`}
           >
             Analytics & Trends
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'profile'
-                ? 'bg-blue-500 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Profile & Settings
           </button>
         </div>
 
@@ -1074,33 +1227,24 @@ const ConstipationReliefTracker = () => {
               <div className="space-y-4">
                 <div>
                   <textarea
-                    value={currentData.notes}
-                    onChange={(e) => updateDailyData({ notes: e.target.value })}
+                    value={currentNote}
+                    onChange={(e) => setCurrentNote(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows="4"
                     placeholder="How did you feel today? Any improvements, concerns, or observations?"
+                    maxLength={500}
                   />
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-500">
-                    {currentData.notes.length}/500 characters
+                    {currentNote.length}/500 characters
                   </div>
                   <button
-                    onClick={() => {
-                      if (currentData.notes.trim()) {
-                        // Force save the current notes
-                        updateDailyData({ 
-                          notes: currentData.notes,
-                          notesSavedAt: new Date().toISOString()
-                        });
-                        // Show success message
-                        alert('Notes saved successfully!');
-                      }
-                    }}
-                    disabled={!currentData.notes.trim()}
+                    onClick={addDailyNote}
+                    disabled={!currentNote.trim()}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      currentData.notes.trim()
+                      currentNote.trim()
                         ? 'bg-blue-500 hover:bg-blue-600 text-white'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
@@ -1109,11 +1253,38 @@ const ConstipationReliefTracker = () => {
                   </button>
                 </div>
                 
-                {currentData.notes && (
+                {showSuccessMessage && (
                   <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center gap-2 text-green-800 text-sm">
                       <span>✓</span>
-                      <span>Auto-saved as you type</span>
+                      <span>Note saved successfully!</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Display saved notes */}
+                {currentData.dailyNotes && currentData.dailyNotes.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-md font-medium text-gray-700 mb-3">Today's Notes</h3>
+                    <div className="space-y-3">
+                      {currentData.dailyNotes.map((note) => (
+                        <div key={note.id} className="bg-gray-50 rounded-lg p-3 border">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="text-gray-800 text-sm">{note.note}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(note.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => deleteDailyNote(note.id)}
+                              className="ml-2 text-red-500 hover:text-red-700 text-sm"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1158,22 +1329,37 @@ const ConstipationReliefTracker = () => {
             {/* Bristol Scale Distribution */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Bristol Stool Scale Distribution</h2>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {bristolScale.map((scale) => {
                   const count = stats.bristolCounts[scale.type] || 0;
                   const percentage = stats.totalBowelMovements > 0 ? (count / stats.totalBowelMovements * 100).toFixed(1) : 0;
                   
                   return (
-                    <div key={scale.type} className={`p-3 rounded-lg ${scale.color}`}>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="font-medium">Type {scale.type}: {scale.name}</span>
-                          <div className="text-sm text-gray-600">{scale.description}</div>
+                    <div key={scale.type} className={`relative p-4 rounded-xl border-2 ${scale.color} transition-all hover:shadow-md`}>
+                      <div className="text-center mb-3">
+                        <div className="text-3xl mb-2">{scale.icon}</div>
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <span className="text-lg font-bold">Type {scale.type}</span>
+                          <span className="text-xl">{scale.emoji}</span>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold">{count} times</div>
-                          <div className="text-sm text-gray-600">{percentage}%</div>
+                        <div className="text-sm font-medium text-gray-800">{scale.name}</div>
+                        <div className="text-xs text-gray-600 mt-1">{scale.description}</div>
+                      </div>
+                      
+                      <div className="bg-white bg-opacity-70 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{count}</div>
+                        <div className="text-sm text-gray-600">times ({percentage}%)</div>
+                        <div className={`text-xs font-medium ${scale.severityColor} mt-1`}>
+                          {scale.severity}
                         </div>
+                      </div>
+                      
+                      {/* Progress bar */}
+                      <div className="mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500"
+                          style={{ width: `${percentage}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -1229,126 +1415,111 @@ const ConstipationReliefTracker = () => {
           </div>
         )}
 
-        {activeTab === 'profile' && (
-          <div className="space-y-6">
-            {/* User Profile Section */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
+      </div>
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Profile & Settings</h2>
+                <button
+                  onClick={() => setShowProfileModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Profile Section */}
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
                   {(user?.username || 'U').charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800">{user?.username || 'User'}</h2>
+                  <h3 className="text-xl font-bold text-gray-800">{user?.username || 'User'}</h3>
                   <p className="text-gray-600">{user?.email || 'No email provided'}</p>
                   <div className="text-sm text-gray-500">
-                    Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Recently'}
+                    Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Recently'}
                   </div>
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Profile Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Profile Information</h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={user?.username || ''}
-                      disabled
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                    />
-                  </div>
+              {/* Update Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    placeholder="Add your email address"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={() => updateProfile({ email: profileEmail })}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                    <input
-                      type="email"
-                      value={user?.email || ''}
-                      placeholder="Add your email address"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                    <input
-                      type="tel"
-                      placeholder="Add your phone number"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
-                    💾 Update Profile
+              {/* Actions */}
+              <div className="grid gap-4">
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-800 mb-2">📥 Export Data</h4>
+                  <p className="text-sm text-gray-600 mb-3">Download all your health tracking data</p>
+                  <button
+                    onClick={exportData}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Download Data
                   </button>
                 </div>
 
-                {/* Account Settings */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Account Settings</h3>
-                  
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-800 mb-2">Profile Photo</h4>
-                    <p className="text-sm text-gray-600 mb-3">Upload a profile picture to personalize your account</p>
-                    <button className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">
-                      📸 Upload Photo
-                    </button>
-                  </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-800 mb-2">📸 Profile Photo</h4>
+                  <p className="text-sm text-gray-600 mb-3">Feature coming soon - upload a profile picture</p>
+                  <button
+                    disabled
+                    className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                  >
+                    Upload Photo (Coming Soon)
+                  </button>
+                </div>
 
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-800 mb-2">Privacy Settings</h4>
-                    <div className="space-y-2">
-                      <label className="flex items-center">
-                        <input type="checkbox" className="mr-2" defaultChecked />
-                        <span className="text-sm">Keep my data private</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="checkbox" className="mr-2" />
-                        <span className="text-sm">Share anonymous analytics</span>
-                      </label>
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-800 mb-2">📊 Your Stats</h4>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-lg font-bold text-blue-600">
+                        {Object.keys(dailyData).length}
+                      </div>
+                      <div className="text-xs text-gray-600">Days Tracked</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-green-600">
+                        {Object.values(dailyData).reduce((total, day) => total + (day.bowelMovements?.length || 0), 0)}
+                      </div>
+                      <div className="text-xs text-gray-600">Total Entries</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-purple-600">
+                        {Math.round(Object.values(dailyData).reduce((total, day) => total + (day.waterGlasses || 0), 0) / Object.keys(dailyData).length * 10) / 10 || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Avg Water/Day</div>
                     </div>
                   </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-800 mb-2">Export Data</h4>
-                    <p className="text-sm text-gray-600 mb-3">Download your health data for personal records</p>
-                    <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
-                      📥 Export Data
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Health Stats Summary */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Your Health Journey</h3>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {Object.keys(dailyData).length}
-                  </div>
-                  <div className="text-sm text-gray-600">Days Tracked</div>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
-                    {Object.values(dailyData).reduce((total, day) => total + (day.bowelMovements?.length || 0), 0)}
-                  </div>
-                  <div className="text-sm text-gray-600">Total Entries</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {Math.round(Object.values(dailyData).reduce((total, day) => total + (day.waterGlasses || 0), 0) / Object.keys(dailyData).length * 10) / 10 || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">Avg Water/Day</div>
                 </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modals */}
       <BowelMovementModal 

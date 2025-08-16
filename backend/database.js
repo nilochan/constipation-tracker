@@ -109,6 +109,18 @@ class Database {
       )
     `);
 
+    // Daily notes table (separate from daily_data to allow multiple entries per day)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS daily_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        note TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+
     console.log('Database tables initialized');
   }
 
