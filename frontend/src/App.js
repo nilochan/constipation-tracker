@@ -1,5 +1,5 @@
 import React from 'react';
-import ConstipationReliefTracker from './ConstipationReliefTracker-Professional';
+import ConstipationReliefTracker from './ConstipationReliefTracker';
 import './App.css';
 
 function App() {
