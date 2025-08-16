@@ -21,8 +21,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Serve static files
-app.use(express.static('../public'));
+// Serve static files from React build
+app.use(express.static('../frontend/build'));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -393,6 +393,11 @@ app.get('/api/analytics/:days', async (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
+});
+
+// Serve React app for all non-API routes
+app.get('*', (req, res) => {
+  res.sendFile('index.html', { root: '../frontend/build' });
 });
 
 // Error handling middleware
