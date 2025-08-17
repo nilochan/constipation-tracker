@@ -433,9 +433,19 @@ app.get('/api/analytics/:days', async (req, res) => {
       ORDER BY bristol_type
     `, [userId, parseInt(days)]);
 
+    // Get all daily notes from the past X days
+    const dailyNotes = await db.all(`
+      SELECT date, note, created_at, id
+      FROM daily_notes
+      WHERE user_id = ?
+      AND date >= date('now', '-' || ? || ' days')
+      ORDER BY date DESC, created_at DESC
+    `, [userId, parseInt(days)]);
+
     res.json({
       historicalData,
-      bristolDistribution: bristolData
+      bristolDistribution: bristolData,
+      dailyNotes
     });
   } catch (error) {
     console.error('Analytics error:', error);
