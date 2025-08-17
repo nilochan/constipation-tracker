@@ -620,6 +620,50 @@ const ConstipationReliefTracker = () => {
     }
   };
 
+  const checkAdminSecret = async () => {
+    try {
+      const response = await fetch('/api/debug/admin-secret');
+      const data = await response.json();
+      
+      alert(`Server expects admin secret: "${data.adminSecret}"\n\nUsing default: ${data.envCheck.usingDefault}\nHas env secret: ${data.envCheck.hasEnvSecret}`);
+    } catch (error) {
+      console.error('Failed to check admin secret:', error);
+      alert('Failed to check admin secret');
+    }
+  };
+
+  const emergencyAdminPromotion = async () => {
+    if (!confirm(`Are you sure you want to promote "${user.username}" to admin using emergency method?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/debug/emergency-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: user.username })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert(data.message);
+        
+        // Update user state to reflect admin status
+        const updatedUser = { ...user, is_admin: true };
+        setUser(updatedUser);
+        setProfileData(updatedUser);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Emergency admin promotion failed:', error);
+      alert('Emergency admin promotion failed');
+    }
+  };
+
   // AI Functions
   const loadAISummaries = async () => {
     setAiSummary(prev => ({ ...prev, loading: true }));
@@ -2140,7 +2184,7 @@ const ConstipationReliefTracker = () => {
                   </div>
                 )}
 
-                {!user?.is_admin && (
+{!user?.is_admin && (
                   <div className="bg-green-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
                     <p className="text-sm text-gray-600 mb-3">Enter admin secret key to gain admin privileges</p>
@@ -2150,6 +2194,18 @@ const ConstipationReliefTracker = () => {
                         className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                       >
                         🔑 Promote to Admin
+                      </button>
+                      <button
+                        onClick={checkAdminSecret}
+                        className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        🔍 Check Admin Secret
+                      </button>
+                      <button
+                        onClick={emergencyAdminPromotion}
+                        className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        🚨 Emergency Admin Promotion
                       </button>
                     </div>
                   </div>
