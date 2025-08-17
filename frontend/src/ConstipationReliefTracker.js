@@ -2238,7 +2238,7 @@ const ConstipationReliefTracker = () => {
                   </div>
                 )}
 
-{/* Show admin promotion for non-admin users OR when not logged in */}
+                {/* Show admin promotion for non-admin users OR when not logged in */}
                 {(user && !user.is_admin) || !user ? (
                   <div className="bg-green-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
