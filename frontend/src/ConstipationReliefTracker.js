@@ -2239,7 +2239,7 @@ const ConstipationReliefTracker = () => {
                 )}
 
                 {/* Show admin promotion for non-admin users OR when not logged in */}
-                {(user && !user.is_admin) || !user ? (
+                {((user && !user.is_admin) || !user) && (
                   <div className="bg-green-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
                     <p className="text-sm text-gray-600 mb-3">{user ? 'Enter admin secret key to gain admin privileges' : 'Admin promotion tools (works even when not logged in)'}</p>
