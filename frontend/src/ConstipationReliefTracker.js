@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Minus, CheckCircle, Circle, Droplets, Apple, Calendar, Clock, BarChart3, Camera, Smile, Meh, Frown, LogOut, User } from 'lucide-react';
+import { Plus, Minus, CheckCircle, Circle, Droplets, Calendar, Clock, BarChart3, Camera, Smile, Meh, Frown, LogOut } from 'lucide-react';
 import ApiService from './services/api';
 import AuthForms from './components/AuthForms';
 
@@ -15,6 +15,7 @@ const ConstipationReliefTracker = () => {
   const [showBowelModal, setShowBowelModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
   const [currentNote, setCurrentNote] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [profileData, setProfileData] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -180,7 +181,7 @@ const ConstipationReliefTracker = () => {
     if (activeTab === 'analytics' && isAuthenticated) {
       loadAISummaries();
     }
-  }, [activeTab, isAuthenticated, currentDate]);
+  }, [activeTab, isAuthenticated, currentDate, loadAISummaries]);
 
   // Load analytics data when switching to analytics tab
   useEffect(() => {
@@ -273,6 +274,7 @@ const ConstipationReliefTracker = () => {
     { name: 'Olive oil (1 tbsp)', note: 'Add to cooked vegetables' }
   ];
 
+  // eslint-disable-next-line no-unused-vars
   const hydrationTips = [
     'Warm water first thing in morning',
     'Water 30 mins before each meal',
