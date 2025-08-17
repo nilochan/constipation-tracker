@@ -527,21 +527,53 @@ const ConstipationReliefTracker = () => {
           }
         }
       }
-      // Parse LINE chat export
-      else if (file.name.toLowerCase().includes('line') || text.includes('Line chat history')) {
-        source = 'line';
+      // Parse LINE chat export or any text file
+      else if (file.name.toLowerCase().includes('line') || text.includes('Line chat history') || file.name.toLowerCase().endsWith('.txt')) {
+        source = source || 'line';
         const lines = text.split('\n').filter(line => line.trim());
         
-        for (const line of lines) {
-          // LINE format may vary, try common patterns
-          const match = line.match(/^(.+?)\t(.+?)\t(.+)$/) || line.match(/^(.+?) (.+?): (.+)$/);
-          if (match) {
-            const [, timestamp, sender, message] = match;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          // Skip header lines and date lines
+          if (line.includes('[LINE] Chat history') || 
+              line.includes('Saved on:') ||
+              line.match(/^[A-Za-z]{3}, \d{1,2}\/\d{1,2}\/\d{4}$/)) {
+            continue;
+          }
+          
+          // LINE tab-separated format: time\tsender\tmessage
+          const tabMatch = line.match(/^(.+?)\t(.+?)\t(.+)$/);
+          if (tabMatch) {
+            const [, timestamp, sender, message] = tabMatch;
             chatHistory.push({
               timestamp: timestamp.trim(),
               sender: sender.trim(),
               message: message.trim()
             });
+          }
+          // Other chat patterns
+          else {
+            const otherMatch = line.match(/^(.+?) (.+?): (.+)$/) ||    // Timestamp Name: Message
+                              line.match(/^\[(.+?)\] (.+?): (.+)$/) || // [Timestamp] Name: Message
+                              line.match(/^(.+?) - (.+?): (.+)$/);     // Timestamp - Name: Message
+            
+            if (otherMatch) {
+              const [, timestamp, sender, message] = otherMatch;
+              chatHistory.push({
+                timestamp: timestamp.trim(),
+                sender: sender.trim(),
+                message: message.trim()
+              });
+            } else if (line.length > 5) {
+              // If no pattern matches, treat as generic text (skip very short lines)
+              chatHistory.push({
+                timestamp: new Date().toISOString(),
+                sender: 'User',
+                message: line
+              });
+            }
           }
         }
       }

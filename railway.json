@@ -10,7 +10,7 @@
   "volumes": [
     {
       "name": "database",
-      "mountPath": "/app/backend"
+      "mountPath": "/app/backend/data"
     }
   ]
 }
