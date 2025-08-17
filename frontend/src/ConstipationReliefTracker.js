@@ -1374,93 +1374,136 @@ const ConstipationReliefTracker = () => {
               </div>
             </div>
 
-            {/* Bristol Scale Distribution */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Bristol Stool Scale Distribution</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Bristol Scale Distribution - Redesigned for Better UX */}
+            <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 shadow-sm border border-purple-100">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-lg">🚽</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Bristol Stool Scale Analysis</h2>
+                  <p className="text-sm text-gray-600">Your bowel movement patterns over the past 30 days</p>
+                </div>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-blue-600">{stats.totalBowelMovements}</div>
+                  <div className="text-xs text-gray-600">Total Movements</div>
+                </div>
+                <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-green-600">
+                    {stats.totalBowelMovements > 0 ? Math.round((stats.totalBowelMovements / 30) * 10) / 10 : 0}
+                  </div>
+                  <div className="text-xs text-gray-600">Avg per Day</div>
+                </div>
+                <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {Object.keys(stats.bristolCounts).length}
+                  </div>
+                  <div className="text-xs text-gray-600">Types Used</div>
+                </div>
+                <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {stats.totalBowelMovements > 0 ? 
+                      Object.entries(stats.bristolCounts).reduce((max, [type, count]) => 
+                        count > (stats.bristolCounts[max] || 0) ? type : max, '1') : '-'}
+                  </div>
+                  <div className="text-xs text-gray-600">Most Common</div>
+                </div>
+              </div>
+
+              {/* Visual Scale with Better Layout */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Breakdown</h3>
                 {bristolScale.map((scale) => {
                   const count = stats.bristolCounts[scale.type] || 0;
-                  const percentage = stats.totalBowelMovements > 0 ? (count / stats.totalBowelMovements * 100).toFixed(1) : 0;
+                  const percentage = stats.totalBowelMovements > 0 ? (count / stats.totalBowelMovements * 100) : 0;
+                  const isUsed = count > 0;
                   
                   return (
-                    <div key={scale.type} className={`relative p-4 rounded-xl border-2 ${scale.color} transition-all hover:shadow-md`}>
-                      <div className="text-center mb-3">
-                        <div className="text-3xl mb-2">{scale.icon}</div>
-                        <div className="flex items-center justify-center gap-2 mb-1">
-                          <span className="text-lg font-bold">Type {scale.type}</span>
-                          <span className="text-xl">{scale.emoji}</span>
+                    <div key={scale.type} className={`relative bg-white rounded-xl p-5 shadow-sm border-2 transition-all hover:shadow-md ${
+                      isUsed ? scale.color : 'border-gray-200 opacity-60'
+                    }`}>
+                      <div className="flex items-center gap-6">
+                        {/* Type Icon and Number */}
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${
+                            isUsed ? 'bg-white shadow-sm' : 'bg-gray-100'
+                          }`}>
+                            {scale.icon}
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-gray-800">Type {scale.type}</div>
+                            <div className="text-xl">{scale.emoji}</div>
+                          </div>
                         </div>
-                        <div className="text-sm font-medium text-gray-800">{scale.name}</div>
-                        <div className="text-xs text-gray-600 mt-1">{scale.description}</div>
-                      </div>
-                      
-                      <div className="bg-white bg-opacity-70 rounded-lg p-3 text-center">
-                        <div className="text-2xl font-bold text-gray-800">{count}</div>
-                        <div className="text-sm text-gray-600">times ({percentage}%)</div>
-                        <div className={`text-xs font-medium ${scale.severityColor} mt-1`}>
-                          {scale.severity}
+
+                        {/* Description */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-800 mb-1">{scale.name}</div>
+                          <div className="text-sm text-gray-600 mb-2">{scale.description}</div>
+                          <div className={`inline-block text-xs font-medium px-2 py-1 rounded-full ${
+                            isUsed ? `${scale.severityColor} bg-white bg-opacity-80` : 'text-gray-500 bg-gray-100'
+                          }`}>
+                            {scale.severity}
+                          </div>
+                        </div>
+
+                        {/* Statistics */}
+                        <div className="text-right min-w-[120px]">
+                          <div className="text-3xl font-bold text-gray-800 mb-1">{count}</div>
+                          <div className="text-sm text-gray-600 mb-2">times ({percentage.toFixed(1)}%)</div>
+                          
+                          {/* Progress Bar */}
+                          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-700 ${
+                                isUsed ? 'bg-gradient-to-r from-purple-500 to-blue-500' : 'bg-gray-300'
+                              }`}
+                              style={{ width: `${Math.max(percentage, isUsed ? 5 : 0)}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Progress bar */}
-                      <div className="mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
+
+                      {/* Usage Indicator */}
+                      {isUsed && (
+                        <div className="absolute top-3 right-3">
+                          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
 
-            {/* Daily Notes History */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">📝</span>
-                </div>
-                <h2 className="text-lg font-semibold text-gray-800">Daily Notes History (30 Days)</h2>
-              </div>
-              
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {analyticsData?.dailyNotes && analyticsData.dailyNotes.length > 0 ? (
-                  analyticsData.dailyNotes.map((note) => (
-                    <div key={note.id} className="bg-gradient-to-r from-green-50 to-teal-50 rounded-lg p-4 border border-green-100">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium text-gray-700">
-                              {new Date(note.date).toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                month: 'short', 
-                                day: 'numeric' 
-                              })}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(note.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
-                        </div>
-                        <button
-                          onClick={() => deleteDailyNote(note.id)}
-                          className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center transition-colors text-xs ml-3"
-                          title="Delete note"
-                        >
-                          ✕
-                        </button>
-                      </div>
+              {/* Health Insights */}
+              <div className="mt-6 bg-white rounded-lg p-4">
+                <h4 className="font-semibold text-gray-800 mb-3">💡 Health Insights</h4>
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span><strong>Types 3-4:</strong> Normal, healthy bowel movements</span>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="text-4xl mb-3">📝</div>
-                    <div className="text-gray-500 text-sm">No notes recorded in the past 30 days</div>
-                    <div className="text-xs text-gray-400 mt-1">Start adding daily notes to see them here</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-500">⚠️</span>
+                      <span><strong>Types 1-2:</strong> May indicate constipation</span>
+                    </div>
                   </div>
-                )}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-500">ℹ️</span>
+                      <span><strong>Type 5:</strong> Soft but formed</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-orange-500">⚠️</span>
+                      <span><strong>Types 6-7:</strong> May indicate diarrhea</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1543,6 +1586,55 @@ const ConstipationReliefTracker = () => {
                     <div className="text-4xl mb-3">📊</div>
                     <div className="text-gray-500 text-sm">No historical data available yet</div>
                     <div className="text-xs text-gray-400 mt-1">Start tracking today to see your progress here!</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Daily Notes History - Moved to Bottom */}
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm">📝</span>
+                </div>
+                <h2 className="text-lg font-semibold text-gray-800">Daily Notes History (30 Days)</h2>
+              </div>
+              
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {analyticsData?.dailyNotes && analyticsData.dailyNotes.length > 0 ? (
+                  analyticsData.dailyNotes.map((note) => (
+                    <div key={note.id} className="bg-gradient-to-r from-green-50 to-teal-50 rounded-lg p-4 border border-green-100">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-gray-700">
+                              {new Date(note.date).toLocaleDateString('en-US', { 
+                                weekday: 'long', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(note.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
+                        </div>
+                        <button
+                          onClick={() => deleteDailyNote(note.id)}
+                          className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center transition-colors text-xs ml-3"
+                          title="Delete note"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-4xl mb-3">📝</div>
+                    <div className="text-gray-500 text-sm">No notes recorded in the past 30 days</div>
+                    <div className="text-xs text-gray-400 mt-1">Start adding daily notes to see them here</div>
                   </div>
                 )}
               </div>
