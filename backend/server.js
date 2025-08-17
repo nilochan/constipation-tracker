@@ -1218,8 +1218,44 @@ app.get('/api/debug/admin-secret', (req, res) => {
   const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
   res.json({ 
     adminSecret: ADMIN_SECRET,
-    message: 'This endpoint should be removed in production'
+    message: 'This endpoint should be removed in production',
+    envCheck: {
+      hasEnvSecret: !!process.env.ADMIN_SECRET,
+      usingDefault: !process.env.ADMIN_SECRET
+    }
   });
+});
+
+// Emergency admin promotion (remove in production)
+app.post('/api/debug/emergency-admin', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username required' });
+    }
+
+    // Find user
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.is_admin) {
+      return res.json({ message: `${username} is already an admin` });
+    }
+
+    // Promote to admin
+    await db.run('UPDATE users SET is_admin = TRUE WHERE id = ?', [user.id]);
+    
+    // Log admin promotion
+    await logActivity(user.id, username, 'EMERGENCY_ADMIN_PROMOTION', 'Emergency admin promotion via debug endpoint', req);
+
+    res.json({ message: `${username} has been promoted to admin via emergency method` });
+  } catch (error) {
+    console.error('Emergency admin promotion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Health check
