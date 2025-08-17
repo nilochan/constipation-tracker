@@ -2,6 +2,9 @@
 
 A personal health tracking application designed to help monitor daily wellness, bowel movements, hydration, and other health metrics.
 
+## Deployment Status
+- Latest update: August 17, 2025 - Railway deployment optimization
+
 ## Features
 
 - 🐰 Daily wellness tracking
