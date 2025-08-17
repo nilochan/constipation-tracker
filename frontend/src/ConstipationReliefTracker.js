@@ -667,54 +667,57 @@ const ConstipationReliefTracker = () => {
 
   const simpleAdminPromotion = async () => {
     try {
-      // First, let's see all users to help with promotion
+      // eslint-disable-next-line no-restricted-globals
+      const username = prompt('Enter username to promote to admin:');
+      
+      if (!username) return;
+      
+      // Promote the user
       const response = await fetch('/api/debug/make-admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}) // Send empty to get user list
+        body: JSON.stringify({ username: username.trim() })
       });
       
       const data = await response.json();
       
-      if (data.users) {
-        // Show user list and let you pick
-        const userList = data.users.map(u => `${u.username} (Admin: ${u.is_admin})`).join('\n');
-        // eslint-disable-next-line no-restricted-globals
-        const username = prompt(`Available users:\n${userList}\n\nEnter username to promote to admin:`);
+      if (response.ok) {
+        alert(data.message);
         
-        if (!username) return;
-        
-        // Now promote the selected user
-        const promoteResponse = await fetch('/api/debug/make-admin', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username: username.trim() })
-        });
-        
-        const promoteData = await promoteResponse.json();
-        
-        if (promoteResponse.ok) {
-          alert(promoteData.message);
-          
-          // If the promoted user is the current user, update state
-          if (user && user.username === username.trim()) {
-            const updatedUser = { ...user, is_admin: true };
-            setUser(updatedUser);
-            setProfileData(updatedUser);
-          }
-        } else {
-          alert(`Error: ${promoteData.error}`);
+        // If the promoted user is the current user, update state
+        if (user && user.username === username.trim()) {
+          const updatedUser = { ...user, is_admin: true };
+          setUser(updatedUser);
+          setProfileData(updatedUser);
         }
       } else {
-        alert(`Error: ${data.error || 'Unknown error'}`);
+        alert(`Error: ${data.error}`);
       }
     } catch (error) {
       console.error('Simple admin promotion failed:', error);
       alert(`Simple admin promotion failed: ${error.message}`);
+    }
+  };
+
+  const showAllUsers = async () => {
+    try {
+      const response = await fetch('/api/debug/users');
+      const data = await response.json();
+      
+      if (response.ok && data.users) {
+        const userList = data.users.map(u => 
+          `${u.username} (Admin: ${u.is_admin ? 'Yes' : 'No'}) - Created: ${new Date(u.created_at).toLocaleDateString()}`
+        ).join('\n');
+        
+        alert(`All Users in Database:\n\n${userList}\n\nCopy one of these usernames to use with admin promotion.`);
+      } else {
+        alert(`Error: ${data.error || 'Failed to get users'}`);
+      }
+    } catch (error) {
+      console.error('Show users failed:', error);
+      alert(`Show users failed: ${error.message}`);
     }
   };
 
@@ -2267,6 +2270,12 @@ const ConstipationReliefTracker = () => {
                         className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                       >
                         ⚡ Simple Admin Promotion
+                      </button>
+                      <button
+                        onClick={showAllUsers}
+                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        👥 Show All Users
                       </button>
                     </div>
                   </div>

@@ -1296,6 +1296,17 @@ app.post('/api/debug/make-admin', async (req, res) => {
   }
 });
 
+// Get all users (for debugging)
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await db.all('SELECT id, username, is_admin, created_at FROM users ORDER BY created_at');
+    res.json({ users });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
