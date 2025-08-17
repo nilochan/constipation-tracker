@@ -23,7 +23,7 @@ const ConstipationReliefTracker = () => {
   const [uploadingChatHistory, setUploadingChatHistory] = useState(false);
   const [chatHistoryStatus, setChatHistoryStatus] = useState('');
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminData, setAdminData] = useState({ logs: [], users: [], loading: false });
+  const [adminData, setAdminData] = useState({ logs: [], users: [], database: null, loading: false });
   const [showAdminPromote, setShowAdminPromote] = useState(false);
   const [adminSecret, setAdminSecret] = useState('');
   const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
@@ -578,14 +578,16 @@ const ConstipationReliefTracker = () => {
     
     setAdminData(prev => ({ ...prev, loading: true }));
     try {
-      const [logsResponse, usersResponse] = await Promise.all([
+      const [logsResponse, usersResponse, databaseResponse] = await Promise.all([
         ApiService.getAdminActivityLogs(),
-        ApiService.getAdminUserStats()
+        ApiService.getAdminUserStats(),
+        ApiService.getAdminDatabaseStats()
       ]);
       
       setAdminData({
         logs: logsResponse.logs || [],
         users: usersResponse.users || [],
+        database: databaseResponse || null,
         loading: false
       });
     } catch (error) {
@@ -2296,6 +2298,47 @@ const ConstipationReliefTracker = () => {
             </div>
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              {/* Database Overview */}
+              {adminData.database && (
+                <div className="bg-purple-50 rounded-lg p-4 mb-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Database Overview</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-blue-600">{adminData.database.database?.totalUsers || 0}</div>
+                      <div className="text-xs text-gray-600">Total Users</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-green-600">{adminData.database.database?.totalAdmins || 0}</div>
+                      <div className="text-xs text-gray-600">Admins</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-purple-600">{adminData.database.database?.totalBowelMovements || 0}</div>
+                      <div className="text-xs text-gray-600">Bowel Movements</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-orange-600">{adminData.database.database?.totalNotes || 0}</div>
+                      <div className="text-xs text-gray-600">Notes</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-red-600">{adminData.database.database?.totalDailyData || 0}</div>
+                      <div className="text-xs text-gray-600">Daily Records</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-indigo-600">{adminData.database.database?.totalMeals || 0}</div>
+                      <div className="text-xs text-gray-600">Meals</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-yellow-600">{adminData.database.recent?.newUsersLast7Days || 0}</div>
+                      <div className="text-xs text-gray-600">New Users (7d)</div>
+                    </div>
+                    <div className="bg-white rounded p-3 text-center">
+                      <div className="text-2xl font-bold text-pink-600">{adminData.database.recent?.actionsLast7Days || 0}</div>
+                      <div className="text-xs text-gray-600">Actions (7d)</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* User Stats */}
                 <div className="bg-blue-50 rounded-lg p-4">
@@ -2310,7 +2353,12 @@ const ConstipationReliefTracker = () => {
                       {adminData.users.map(user => (
                         <div key={user.id} className="bg-white rounded p-3 border">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-gray-800">{user.username}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-800">{user.username}</span>
+                              {user.is_admin && (
+                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">👑 Admin</span>
+                              )}
+                            </div>
                             <span className="text-xs text-gray-500">ID: {user.id}</span>
                           </div>
                           <div className="text-sm text-gray-600 space-y-1">

@@ -214,6 +214,10 @@ class ApiService {
     return this.request('/admin/user-stats');
   }
 
+  async getAdminDatabaseStats() {
+    return this.request('/admin/database-stats');
+  }
+
   async promoteToAdmin(username, adminSecret) {
     return this.request('/admin/promote', {
       method: 'POST',

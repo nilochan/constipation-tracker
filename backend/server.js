@@ -1086,6 +1086,15 @@ app.post('/api/admin/promote', async (req, res) => {
     
     // Check admin secret key (you can set this in environment variables)
     const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
+    
+    // Debug logging
+    console.log('Admin promotion attempt:', {
+      username,
+      providedSecret: adminSecret,
+      expectedSecret: ADMIN_SECRET,
+      match: adminSecret === ADMIN_SECRET
+    });
+    
     if (adminSecret !== ADMIN_SECRET) {
       return res.status(403).json({ error: 'Invalid admin secret' });
     }
@@ -1109,6 +1118,71 @@ app.post('/api/admin/promote', async (req, res) => {
   }
 });
 
+// Admin dashboard - Database overview (Admin only)
+app.get('/api/admin/database-stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    // Get comprehensive database statistics
+    const totalUsers = await db.get('SELECT COUNT(*) as count FROM users');
+    const totalAdmins = await db.get('SELECT COUNT(*) as count FROM users WHERE is_admin = TRUE');
+    const totalRegularUsers = await db.get('SELECT COUNT(*) as count FROM users WHERE is_admin = FALSE');
+    
+    const totalDailyData = await db.get('SELECT COUNT(*) as count FROM daily_data');
+    const totalBowelMovements = await db.get('SELECT COUNT(*) as count FROM bowel_movements');
+    const totalMeals = await db.get('SELECT COUNT(*) as count FROM meals');
+    const totalNotes = await db.get('SELECT COUNT(*) as count FROM daily_notes');
+    const totalActivityLogs = await db.get('SELECT COUNT(*) as count FROM activity_log');
+    
+    // Recent activity (last 7 days)
+    const recentUsers = await db.get(`
+      SELECT COUNT(*) as count FROM users 
+      WHERE created_at >= datetime('now', '-7 days')
+    `);
+    
+    const recentActivity = await db.get(`
+      SELECT COUNT(*) as count FROM activity_log 
+      WHERE created_at >= datetime('now', '-7 days')
+    `);
+    
+    // Most active users
+    const mostActiveUsers = await db.all(`
+      SELECT 
+        u.username,
+        u.email,
+        u.created_at,
+        COUNT(DISTINCT dd.date) as days_tracked,
+        COUNT(DISTINCT al.id) as total_actions
+      FROM users u
+      LEFT JOIN daily_data dd ON u.id = dd.user_id
+      LEFT JOIN activity_log al ON u.id = al.user_id
+      WHERE u.is_admin = FALSE
+      GROUP BY u.id
+      ORDER BY total_actions DESC, days_tracked DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      database: {
+        totalUsers: totalUsers.count,
+        totalAdmins: totalAdmins.count,
+        totalRegularUsers: totalRegularUsers.count,
+        totalDailyData: totalDailyData.count,
+        totalBowelMovements: totalBowelMovements.count,
+        totalMeals: totalMeals.count,
+        totalNotes: totalNotes.count,
+        totalActivityLogs: totalActivityLogs.count
+      },
+      recent: {
+        newUsersLast7Days: recentUsers.count,
+        actionsLast7Days: recentActivity.count
+      },
+      mostActiveUsers
+    });
+  } catch (error) {
+    console.error('Admin database stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch database stats' });
+  }
+});
+
 // Admin dashboard - User stats (Admin only)
 app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -1118,6 +1192,7 @@ app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, re
         u.username,
         u.email,
         u.created_at,
+        u.is_admin,
         COUNT(DISTINCT dd.date) as days_tracked,
         COUNT(DISTINCT bm.id) as total_bowel_movements,
         COUNT(DISTINCT dn.id) as total_notes,
@@ -1127,7 +1202,6 @@ app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, re
       LEFT JOIN bowel_movements bm ON u.id = bm.user_id
       LEFT JOIN daily_notes dn ON u.id = dn.user_id
       LEFT JOIN activity_log al ON u.id = al.user_id
-      WHERE u.is_admin = FALSE
       GROUP BY u.id
       ORDER BY u.created_at DESC
     `);
@@ -1137,6 +1211,15 @@ app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, re
     console.error('Admin user stats error:', error);
     res.status(500).json({ error: 'Failed to fetch user stats' });
   }
+});
+
+// Debug endpoint to check admin secret (remove in production)
+app.get('/api/debug/admin-secret', (req, res) => {
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
+  res.json({ 
+    adminSecret: ADMIN_SECRET,
+    message: 'This endpoint should be removed in production'
+  });
 });
 
 // Health check
