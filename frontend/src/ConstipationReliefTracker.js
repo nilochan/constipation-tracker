@@ -661,7 +661,35 @@ const ConstipationReliefTracker = () => {
       }
     } catch (error) {
       console.error('Emergency admin promotion failed:', error);
-      alert('Emergency admin promotion failed');
+      alert(`Emergency admin promotion failed: ${error.message}`);
+    }
+  };
+
+  const simpleAdminPromotion = async () => {
+    try {
+      const response = await fetch('/api/debug/make-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: user.username })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert(data.message);
+        
+        // Update user state to reflect admin status
+        const updatedUser = { ...user, is_admin: true };
+        setUser(updatedUser);
+        setProfileData(updatedUser);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Simple admin promotion failed:', error);
+      alert(`Simple admin promotion failed: ${error.message}`);
     }
   };
 
@@ -2207,6 +2235,12 @@ const ConstipationReliefTracker = () => {
                         className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                       >
                         🚨 Emergency Admin Promotion
+                      </button>
+                      <button
+                        onClick={simpleAdminPromotion}
+                        className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        ⚡ Simple Admin Promotion
                       </button>
                     </div>
                   </div>

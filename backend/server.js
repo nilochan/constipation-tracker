@@ -1229,24 +1229,37 @@ app.get('/api/debug/admin-secret', (req, res) => {
 // Emergency admin promotion (remove in production)
 app.post('/api/debug/emergency-admin', async (req, res) => {
   try {
+    console.log('Emergency admin promotion request:', req.body);
+    
     const { username } = req.body;
     
     if (!username) {
+      console.log('No username provided');
       return res.status(400).json({ error: 'Username required' });
     }
 
+    console.log('Looking for user:', username);
+    
     // Find user
     const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    console.log('Found user:', user);
+    
     if (!user) {
+      console.log('User not found');
       return res.status(404).json({ error: 'User not found' });
     }
 
     if (user.is_admin) {
+      console.log('User is already admin');
       return res.json({ message: `${username} is already an admin` });
     }
 
+    console.log('Promoting user to admin...');
+    
     // Promote to admin
     await db.run('UPDATE users SET is_admin = TRUE WHERE id = ?', [user.id]);
+    
+    console.log('Admin promotion successful');
     
     // Log admin promotion
     await logActivity(user.id, username, 'EMERGENCY_ADMIN_PROMOTION', 'Emergency admin promotion via debug endpoint', req);
@@ -1254,7 +1267,32 @@ app.post('/api/debug/emergency-admin', async (req, res) => {
     res.json({ message: `${username} has been promoted to admin via emergency method` });
   } catch (error) {
     console.error('Emergency admin promotion error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: `Internal server error: ${error.message}` });
+  }
+});
+
+// Simple admin promotion without auth (emergency fallback)
+app.post('/api/debug/make-admin', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    // Get all users if no username provided
+    if (!username) {
+      const users = await db.all('SELECT id, username, is_admin FROM users');
+      return res.json({ users, message: 'Provide username to promote' });
+    }
+    
+    // Promote user
+    const result = await db.run('UPDATE users SET is_admin = TRUE WHERE username = ?', [username]);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: `${username} promoted to admin`, changes: result.changes });
+  } catch (error) {
+    console.error('Make admin error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
