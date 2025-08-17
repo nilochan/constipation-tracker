@@ -6,12 +6,51 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const XLSX = require('xlsx');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + req.user.userId + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files (jpeg, jpg, png, gif) are allowed'));
+    }
+  }
+});
 
 // Middleware
 app.use(helmet());
@@ -23,6 +62,9 @@ app.use(express.json());
 
 // Serve static files from React build
 app.use(express.static('../frontend/build'));
+
+// Serve uploaded files
+app.use('/uploads', express.static(uploadsDir));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -458,7 +500,7 @@ app.get('/api/profile', async (req, res) => {
   try {
     const userId = req.user.userId;
     
-    const user = await db.get('SELECT id, username, email, created_at FROM users WHERE id = ?', [userId]);
+    const user = await db.get('SELECT id, username, email, profile_photo, created_at FROM users WHERE id = ?', [userId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -484,10 +526,40 @@ app.put('/api/profile', [
 
     await db.run('UPDATE users SET email = ? WHERE id = ?', [email, userId]);
     
-    const updatedUser = await db.get('SELECT id, username, email, created_at FROM users WHERE id = ?', [userId]);
+    const updatedUser = await db.get('SELECT id, username, email, profile_photo, created_at FROM users WHERE id = ?', [userId]);
     res.json(updatedUser);
   } catch (error) {
     console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Upload profile photo
+app.post('/api/profile/photo', authenticateToken, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No photo uploaded' });
+    }
+
+    const userId = req.user.userId;
+    const photoPath = `/uploads/${req.file.filename}`;
+
+    // Delete old photo if exists
+    const oldUser = await db.get('SELECT profile_photo FROM users WHERE id = ?', [userId]);
+    if (oldUser?.profile_photo) {
+      const oldPhotoPath = path.join(__dirname, oldUser.profile_photo);
+      if (fs.existsSync(oldPhotoPath)) {
+        fs.unlinkSync(oldPhotoPath);
+      }
+    }
+
+    // Update user with new photo path
+    await db.run('UPDATE users SET profile_photo = ? WHERE id = ?', [photoPath, userId]);
+    
+    const updatedUser = await db.get('SELECT id, username, email, profile_photo, created_at FROM users WHERE id = ?', [userId]);
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Upload photo error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -496,6 +568,7 @@ app.put('/api/profile', [
 app.get('/api/profile/export', async (req, res) => {
   try {
     const userId = req.user.userId;
+    const format = req.query.format || 'json'; // Default to JSON
 
     // Get user info
     const user = await db.get('SELECT username, email, created_at FROM users WHERE id = ?', [userId]);
@@ -507,21 +580,109 @@ app.get('/api/profile/export', async (req, res) => {
     const symptoms = await db.all('SELECT * FROM symptoms WHERE user_id = ? ORDER BY date', [userId]);
     const dailyNotes = await db.all('SELECT * FROM daily_notes WHERE user_id = ? ORDER BY date, created_at', [userId]);
 
-    const exportData = {
-      user,
-      exportDate: new Date().toISOString(),
-      data: {
-        dailyData,
-        bowelMovements,
-        meals,
-        symptoms,
-        dailyNotes
-      }
-    };
+    const dateStr = new Date().toISOString().split('T')[0];
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${user.username}_health_data_${new Date().toISOString().split('T')[0]}.json"`);
-    res.json(exportData);
+    if (format === 'excel') {
+      // Create Excel workbook
+      const workbook = XLSX.utils.book_new();
+
+      // User Info Sheet
+      const userSheet = XLSX.utils.json_to_sheet([{
+        username: user.username,
+        email: user.email || 'Not provided',
+        memberSince: user.created_at,
+        exportDate: new Date().toISOString()
+      }]);
+      XLSX.utils.book_append_sheet(workbook, userSheet, 'User Info');
+
+      // Daily Data Sheet
+      if (dailyData.length > 0) {
+        const dailySheet = XLSX.utils.json_to_sheet(dailyData.map(d => ({
+          Date: d.date,
+          'Water Glasses': d.water_glasses,
+          Mood: d.mood,
+          'Stress Level': d.stress_level,
+          'Sleep Quality': d.sleep_quality,
+          Notes: d.notes,
+          'Updated At': d.updated_at
+        })));
+        XLSX.utils.book_append_sheet(workbook, dailySheet, 'Daily Tracking');
+      }
+
+      // Bowel Movements Sheet
+      if (bowelMovements.length > 0) {
+        const bowelSheet = XLSX.utils.json_to_sheet(bowelMovements.map(bm => ({
+          Date: bm.date,
+          Time: bm.time,
+          'Bristol Type': bm.bristol_type,
+          Urgency: bm.urgency,
+          Straining: bm.straining ? 'Yes' : 'No',
+          Satisfaction: bm.satisfaction,
+          'Recorded At': bm.created_at
+        })));
+        XLSX.utils.book_append_sheet(workbook, bowelSheet, 'Bowel Movements');
+      }
+
+      // Meals Sheet
+      if (meals.length > 0) {
+        const mealsSheet = XLSX.utils.json_to_sheet(meals.map(m => ({
+          Date: m.date,
+          'Meal Type': m.meal_type,
+          'Food Items': m.food_items,
+          Portion: m.portion,
+          'Trigger Foods': m.trigger_foods,
+          'Recorded At': m.created_at
+        })));
+        XLSX.utils.book_append_sheet(workbook, mealsSheet, 'Meals');
+      }
+
+      // Symptoms Sheet
+      if (symptoms.length > 0) {
+        const symptomsSheet = XLSX.utils.json_to_sheet(symptoms.map(s => ({
+          Date: s.date,
+          Bloating: s.bloating,
+          'Abdominal Pain': s.abdominal_pain,
+          Nausea: s.nausea,
+          Fatigue: s.fatigue,
+          'Updated At': s.updated_at
+        })));
+        XLSX.utils.book_append_sheet(workbook, symptomsSheet, 'Symptoms');
+      }
+
+      // Daily Notes Sheet
+      if (dailyNotes.length > 0) {
+        const notesSheet = XLSX.utils.json_to_sheet(dailyNotes.map(n => ({
+          Date: n.date,
+          Note: n.note,
+          'Created At': n.created_at
+        })));
+        XLSX.utils.book_append_sheet(workbook, notesSheet, 'Daily Notes');
+      }
+
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${user.username}_health_data_${dateStr}.xlsx"`);
+      res.send(excelBuffer);
+    } else {
+      // JSON format (original)
+      const exportData = {
+        user,
+        exportDate: new Date().toISOString(),
+        data: {
+          dailyData,
+          bowelMovements,
+          meals,
+          symptoms,
+          dailyNotes
+        }
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${user.username}_health_data_${dateStr}.json"`);
+      res.json(exportData);
+    }
   } catch (error) {
     console.error('Export data error:', error);
     res.status(500).json({ error: 'Internal server error' });

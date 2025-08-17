@@ -23,6 +23,7 @@ class Database {
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         email TEXT UNIQUE,
+        profile_photo TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);

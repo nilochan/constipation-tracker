@@ -19,6 +19,7 @@ const ConstipationReliefTracker = () => {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileEmail, setProfileEmail] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Bristol Stool Scale definitions with visual icons
   const bristolScale = [
@@ -412,21 +413,54 @@ const ConstipationReliefTracker = () => {
     }
   };
 
-  const exportData = async () => {
+  const exportData = async (format = 'json') => {
     try {
-      const blob = await ApiService.exportData();
+      const blob = await ApiService.exportData(format);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `health_data_${new Date().toISOString().split('T')[0]}.json`;
+      const extension = format === 'excel' ? 'xlsx' : 'json';
+      a.download = `health_data_${new Date().toISOString().split('T')[0]}.${extension}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
       console.error('Failed to export data:', error);
-      alert('Failed to export data. Please try again.');
+      alert(`Failed to export ${format} data. Please try again.`);
+    }
+  };
+
+  const uploadProfilePhoto = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+      alert('Please select a valid image file (JPEG, PNG, or GIF)');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const updatedUser = await ApiService.uploadProfilePhoto(file);
+      setUser(updatedUser);
+      setProfileData(updatedUser);
+      alert('Profile photo updated successfully!');
+    } catch (error) {
+      console.error('Failed to upload photo:', error);
+      alert('Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+      // Clear the input
+      event.target.value = '';
     }
   };
 
@@ -837,9 +871,17 @@ const ConstipationReliefTracker = () => {
                 }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-100"
               >
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                  {(user?.username || 'U').charAt(0).toUpperCase()}
-                </div>
+                {user?.profile_photo ? (
+                  <img 
+                    src={user.profile_photo} 
+                    alt="Profile" 
+                    className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    {(user?.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="text-left hidden sm:block">
                   <div className="text-sm font-medium">{user?.username || 'User'}</div>
                   <div className="text-xs text-gray-500">View Profile</div>
@@ -1529,8 +1571,33 @@ const ConstipationReliefTracker = () => {
             <div className="p-6 space-y-6">
               {/* Profile Section */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-                  {(user?.username || 'U').charAt(0).toUpperCase()}
+                <div className="relative">
+                  {user?.profile_photo ? (
+                    <img 
+                      src={user.profile_photo} 
+                      alt="Profile" 
+                      className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
+                      {(user?.username || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    id="photoUpload"
+                    accept="image/*"
+                    onChange={uploadProfilePhoto}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => document.getElementById('photoUpload').click()}
+                    disabled={uploadingPhoto}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center text-xs transition-colors"
+                    title="Change photo"
+                  >
+                    {uploadingPhoto ? '⏳' : '📷'}
+                  </button>
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-800">{user?.username || 'User'}</h3>
@@ -1566,23 +1633,47 @@ const ConstipationReliefTracker = () => {
                 <div className="bg-green-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-800 mb-2">📥 Export Data</h4>
                   <p className="text-sm text-gray-600 mb-3">Download all your health tracking data</p>
-                  <button
-                    onClick={exportData}
-                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Download Data
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => exportData('json')}
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      📄 JSON Format
+                    </button>
+                    <button
+                      onClick={() => exportData('excel')}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      📊 Excel Format
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Excel format is perfect for doctors and spreadsheet analysis
+                  </p>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-blue-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-800 mb-2">📸 Profile Photo</h4>
-                  <p className="text-sm text-gray-600 mb-3">Feature coming soon - upload a profile picture</p>
-                  <button
-                    disabled
-                    className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg text-sm cursor-not-allowed"
-                  >
-                    Upload Photo (Coming Soon)
-                  </button>
+                  <p className="text-sm text-gray-600 mb-3">Upload a profile picture to personalize your account</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      {user?.profile_photo ? (
+                        <p className="text-xs text-green-600">✓ Photo uploaded successfully</p>
+                      ) : (
+                        <p className="text-xs text-gray-500">No photo uploaded yet</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => document.getElementById('photoUpload').click()}
+                      disabled={uploadingPhoto}
+                      className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {uploadingPhoto ? 'Uploading...' : user?.profile_photo ? 'Change Photo' : 'Upload Photo'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Supported: JPEG, PNG, GIF (max 5MB)
+                  </p>
                 </div>
 
                 <div className="bg-blue-50 rounded-lg p-4">

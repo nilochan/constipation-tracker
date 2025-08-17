@@ -143,8 +143,8 @@ class ApiService {
     });
   }
 
-  async exportData() {
-    const response = await fetch(`${API_BASE_URL}/profile/export`, {
+  async exportData(format = 'json') {
+    const response = await fetch(`${API_BASE_URL}/profile/export?format=${format}`, {
       headers: this.getHeaders(),
     });
     
@@ -154,6 +154,27 @@ class ApiService {
     }
     
     return response.blob();
+  }
+
+  async uploadProfilePhoto(file) {
+    const formData = new FormData();
+    formData.append('photo', file);
+
+    const response = await fetch(`${API_BASE_URL}/profile/photo`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        // Don't set Content-Type, let browser set it with boundary for FormData
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Photo upload failed');
+    }
+
+    return response.json();
   }
 
   isAuthenticated() {
