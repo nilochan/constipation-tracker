@@ -667,25 +667,50 @@ const ConstipationReliefTracker = () => {
 
   const simpleAdminPromotion = async () => {
     try {
+      // First, let's see all users to help with promotion
       const response = await fetch('/api/debug/make-admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username: user.username })
+        body: JSON.stringify({}) // Send empty to get user list
       });
       
       const data = await response.json();
       
-      if (response.ok) {
-        alert(data.message);
+      if (data.users) {
+        // Show user list and let you pick
+        const userList = data.users.map(u => `${u.username} (Admin: ${u.is_admin})`).join('\n');
+        // eslint-disable-next-line no-restricted-globals
+        const username = prompt(`Available users:\n${userList}\n\nEnter username to promote to admin:`);
         
-        // Update user state to reflect admin status
-        const updatedUser = { ...user, is_admin: true };
-        setUser(updatedUser);
-        setProfileData(updatedUser);
+        if (!username) return;
+        
+        // Now promote the selected user
+        const promoteResponse = await fetch('/api/debug/make-admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username: username.trim() })
+        });
+        
+        const promoteData = await promoteResponse.json();
+        
+        if (promoteResponse.ok) {
+          alert(promoteData.message);
+          
+          // If the promoted user is the current user, update state
+          if (user && user.username === username.trim()) {
+            const updatedUser = { ...user, is_admin: true };
+            setUser(updatedUser);
+            setProfileData(updatedUser);
+          }
+        } else {
+          alert(`Error: ${promoteData.error}`);
+        }
       } else {
-        alert(`Error: ${data.error}`);
+        alert(`Error: ${data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Simple admin promotion failed:', error);
@@ -2213,10 +2238,11 @@ const ConstipationReliefTracker = () => {
                   </div>
                 )}
 
-{!user?.is_admin && (
+{/* Show admin promotion for non-admin users OR when not logged in */}
+                {(user && !user.is_admin) || !user ? (
                   <div className="bg-green-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
-                    <p className="text-sm text-gray-600 mb-3">Enter admin secret key to gain admin privileges</p>
+                    <p className="text-sm text-gray-600 mb-3">{user ? 'Enter admin secret key to gain admin privileges' : 'Admin promotion tools (works even when not logged in)'}</p>
                     <div className="space-y-2">
                       <button
                         onClick={() => setShowAdminPromote(true)}
