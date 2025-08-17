@@ -920,12 +920,32 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
     const userId = req.user.userId;
     const { chatHistory, source } = req.body;
 
-    // For now, store chat history in a simple table even without Pinecone
+    // Validate chat history format
+    if (!Array.isArray(chatHistory)) {
+      return res.status(400).json({ error: 'Chat history must be an array' });
+    }
+    
+    if (chatHistory.length === 0) {
+      return res.status(400).json({ error: 'Chat history cannot be empty' });
+    }
+    
+    // Validate first few messages for proper format
+    for (let i = 0; i < Math.min(3, chatHistory.length); i++) {
+      const msg = chatHistory[i];
+      if (!msg.message || !msg.sender) {
+        return res.status(400).json({ 
+          error: `Invalid message format at index ${i}. Expected {message, sender, timestamp}`,
+          received: msg
+        });
+      }
+    }
+
     console.log('Received chat history upload:', {
       userId,
       source,
       historyLength: chatHistory.length,
-      pineconeConfigured: !!pineconeIndex
+      pineconeConfigured: !!pineconeIndex,
+      sampleMessage: chatHistory[0]
     });
 
     let processed = 0;
@@ -992,7 +1012,15 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
     });
   } catch (error) {
     console.error('Chat history upload error:', error);
-    res.status(500).json({ error: 'Failed to process chat history' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      type: error.constructor.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to process chat history',
+      details: error.message
+    });
   }
 });
 
