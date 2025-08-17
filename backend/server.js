@@ -16,6 +16,29 @@ const { Pinecone } = require('@pinecone-database/pinecone');
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
 
+// Admin middleware
+const requireAdmin = (req, res, next) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Activity logging function
+const logActivity = async (userId, username, action, details = null, req = null) => {
+  try {
+    const ipAddress = req ? (req.ip || req.connection.remoteAddress || 'Unknown') : 'System';
+    const userAgent = req ? (req.get('User-Agent') || 'Unknown') : 'System';
+    
+    await db.run(`
+      INSERT INTO activity_log (user_id, username, action, details, ip_address, user_agent)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [userId, username, action, details, ipAddress, userAgent]);
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+};
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -32,7 +55,8 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'profile-' + req.user.userId + '-' + uniqueSuffix + path.extname(file.originalname));
+    const userId = req.user ? req.user.userId : 'temp';
+    cb(null, 'profile-' + userId + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
@@ -98,23 +122,26 @@ app.post('/api/register', [
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user (admin role can be granted later via admin button)
     const result = await db.run(
-      'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
-      [username, hashedPassword, email]
+      'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, ?)',
+      [username, hashedPassword, email, false]
     );
 
     // Generate token
     const token = jwt.sign(
-      { userId: result.id, username },
+      { userId: result.id, username, isAdmin: false },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Log registration activity
+    await logActivity(result.id, username, 'REGISTER', 'User account created', req);
+
     res.status(201).json({
       message: 'User created successfully',
       token,
-      user: { id: result.id, username, email }
+      user: { id: result.id, username, email, is_admin: false }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -148,15 +175,18 @@ app.post('/api/login', [
 
     // Generate token
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { userId: user.id, username: user.username, isAdmin: user.is_admin },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Log login activity
+    await logActivity(user.id, user.username, 'LOGIN', null, req);
+
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user.id, username: user.username, email: user.email }
+      user: { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -538,7 +568,36 @@ app.put('/api/profile', [
 });
 
 // Upload profile photo
-app.post('/api/profile/photo', authenticateToken, upload.single('photo'), async (req, res) => {
+app.post('/api/profile/photo', authenticateToken, (req, res, next) => {
+  // Create dynamic upload with authenticated user info
+  const dynamicUpload = multer({
+    storage: multer.diskStorage({
+      destination: function (req, file, cb) {
+        cb(null, uploadsDir);
+      },
+      filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'profile-' + req.user.userId + '-' + uniqueSuffix + path.extname(file.originalname));
+      }
+    }),
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+      const allowedTypes = /jpeg|jpg|png|gif/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype);
+      
+      if (mimetype && extname) {
+        return cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    }
+  }).single('photo');
+  
+  dynamicUpload(req, res, next);
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No photo uploaded' });
@@ -559,7 +618,10 @@ app.post('/api/profile/photo', authenticateToken, upload.single('photo'), async 
     // Update user with new photo path
     await db.run('UPDATE users SET profile_photo = ? WHERE id = ?', [photoPath, userId]);
     
-    const updatedUser = await db.get('SELECT id, username, email, profile_photo, created_at FROM users WHERE id = ?', [userId]);
+    // Log photo upload activity
+    await logActivity(userId, req.user.username, 'PROFILE_PHOTO_UPLOAD', `Uploaded: ${req.file.filename}`, req);
+    
+    const updatedUser = await db.get('SELECT id, username, email, profile_photo, created_at, is_admin FROM users WHERE id = ?', [userId]);
     res.json(updatedUser);
   } catch (error) {
     console.error('Upload photo error:', error);
@@ -844,8 +906,8 @@ Provide a supportive weekly health summary (3-4 sentences) with gentle insights 
   }
 });
 
-// Upload and process chat history
-app.post('/api/ai/upload-chat-history', [
+// Upload and process chat history (Admin only)
+app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
   body('chatHistory').isArray({ min: 1 }),
   body('source').isIn(['whatsapp', 'line', 'other'])
 ], async (req, res) => {
@@ -888,6 +950,9 @@ app.post('/api/ai/upload-chat-history', [
 
       await pineconeIndex.upsert(vectors);
     }
+
+    // Log chat history upload activity
+    await logActivity(userId, req.user.username, 'CHAT_HISTORY_UPLOAD', `Uploaded ${processed} messages from ${source}`, req);
 
     res.json({ 
       message: `Successfully processed ${processed} chat messages from ${source}`,
@@ -984,6 +1049,93 @@ Provide a helpful, supportive response (2-3 sentences). Focus on digestive healt
       response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
       timestamp: new Date().toISOString()
     });
+  }
+});
+
+// Admin dashboard - Activity logs (Admin only)
+app.get('/api/admin/activity-logs', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    
+    const logs = await db.all(`
+      SELECT al.*, u.email, u.created_at as user_created_at
+      FROM activity_log al
+      LEFT JOIN users u ON al.user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [parseInt(limit), parseInt(offset)]);
+
+    const totalCount = await db.get('SELECT COUNT(*) as count FROM activity_log');
+    
+    res.json({
+      logs,
+      total: totalCount.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Admin activity logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch activity logs' });
+  }
+});
+
+// Promote user to admin (Special endpoint with secret key)
+app.post('/api/admin/promote', async (req, res) => {
+  try {
+    const { username, adminSecret } = req.body;
+    
+    // Check admin secret key (you can set this in environment variables)
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
+    if (adminSecret !== ADMIN_SECRET) {
+      return res.status(403).json({ error: 'Invalid admin secret' });
+    }
+
+    // Find user
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Promote to admin
+    await db.run('UPDATE users SET is_admin = TRUE WHERE id = ?', [user.id]);
+    
+    // Log admin promotion
+    await logActivity(user.id, username, 'ADMIN_PROMOTION', 'User promoted to admin', req);
+
+    res.json({ message: `User ${username} has been promoted to admin` });
+  } catch (error) {
+    console.error('Admin promotion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin dashboard - User stats (Admin only)
+app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const userStats = await db.all(`
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.created_at,
+        COUNT(DISTINCT dd.date) as days_tracked,
+        COUNT(DISTINCT bm.id) as total_bowel_movements,
+        COUNT(DISTINCT dn.id) as total_notes,
+        MAX(al.created_at) as last_activity
+      FROM users u
+      LEFT JOIN daily_data dd ON u.id = dd.user_id
+      LEFT JOIN bowel_movements bm ON u.id = bm.user_id
+      LEFT JOIN daily_notes dn ON u.id = dn.user_id
+      LEFT JOIN activity_log al ON u.id = al.user_id
+      WHERE u.is_admin = FALSE
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `);
+
+    res.json({ users: userStats });
+  } catch (error) {
+    console.error('Admin user stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch user stats' });
   }
 });
 

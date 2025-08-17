@@ -205,6 +205,22 @@ class ApiService {
     });
   }
 
+  // Admin Services
+  async getAdminActivityLogs(limit = 100, offset = 0) {
+    return this.request(`/admin/activity-logs?limit=${limit}&offset=${offset}`);
+  }
+
+  async getAdminUserStats() {
+    return this.request('/admin/user-stats');
+  }
+
+  async promoteToAdmin(username, adminSecret) {
+    return this.request('/admin/promote', {
+      method: 'POST',
+      body: JSON.stringify({ username, adminSecret }),
+    });
+  }
+
   isAuthenticated() {
     return !!this.token;
   }

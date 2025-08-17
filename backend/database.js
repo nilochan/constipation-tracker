@@ -24,6 +24,7 @@ class Database {
         password TEXT NOT NULL,
         email TEXT UNIQUE,
         profile_photo TEXT,
+        is_admin BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -117,6 +118,21 @@ class Database {
         user_id INTEGER NOT NULL,
         date TEXT NOT NULL,
         note TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+
+    // Activity log table for admin monitoring
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id)
       )

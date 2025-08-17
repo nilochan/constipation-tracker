@@ -22,6 +22,10 @@ const ConstipationReliefTracker = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingChatHistory, setUploadingChatHistory] = useState(false);
   const [chatHistoryStatus, setChatHistoryStatus] = useState('');
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminData, setAdminData] = useState({ logs: [], users: [], loading: false });
+  const [showAdminPromote, setShowAdminPromote] = useState(false);
+  const [adminSecret, setAdminSecret] = useState('');
   const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -565,6 +569,52 @@ const ConstipationReliefTracker = () => {
       setUploadingChatHistory(false);
       // Clear the input
       event.target.value = '';
+    }
+  };
+
+  // Admin Functions
+  const loadAdminData = async () => {
+    if (!user?.is_admin) return;
+    
+    setAdminData(prev => ({ ...prev, loading: true }));
+    try {
+      const [logsResponse, usersResponse] = await Promise.all([
+        ApiService.getAdminActivityLogs(),
+        ApiService.getAdminUserStats()
+      ]);
+      
+      setAdminData({
+        logs: logsResponse.logs || [],
+        users: usersResponse.users || [],
+        loading: false
+      });
+    } catch (error) {
+      console.error('Failed to load admin data:', error);
+      setAdminData(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const promoteToAdmin = async () => {
+    if (!adminSecret.trim()) {
+      alert('Please enter the admin secret key');
+      return;
+    }
+
+    try {
+      const response = await ApiService.promoteToAdmin(user.username, adminSecret);
+      alert(response.message);
+      
+      // Update user state to reflect admin status
+      const updatedUser = { ...user, is_admin: true };
+      setUser(updatedUser);
+      setProfileData(updatedUser);
+      
+      // Clear form and close modal
+      setAdminSecret('');
+      setShowAdminPromote(false);
+    } catch (error) {
+      console.error('Admin promotion failed:', error);
+      alert('Failed to promote to admin. Please check your secret key.');
     }
   };
 
@@ -2030,43 +2080,78 @@ const ConstipationReliefTracker = () => {
                   </p>
                 </div>
 
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-800 mb-2">💬 Chat History Integration</h4>
-                  <p className="text-sm text-gray-600 mb-3">Upload WhatsApp/LINE chat history to enhance AI responses with personal context</p>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="file"
-                        id="chatHistoryUpload"
-                        accept=".txt,.json"
-                        onChange={uploadChatHistory}
-                        className="hidden"
-                      />
-                      <button
-                        onClick={() => document.getElementById('chatHistoryUpload').click()}
-                        disabled={uploadingChatHistory}
-                        className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {uploadingChatHistory ? 'Processing...' : 'Upload Chat History'}
-                      </button>
-                      <div className="flex-1">
-                        {chatHistoryStatus && (
-                          <p className="text-xs text-green-600">✓ {chatHistoryStatus}</p>
-                        )}
+{user?.is_admin && (
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-800 mb-2">💬 Chat History Integration (Admin Only)</h4>
+                    <p className="text-sm text-gray-600 mb-3">Upload WhatsApp/LINE chat history to enhance AI responses with personal context for all users</p>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="file"
+                          id="chatHistoryUpload"
+                          accept=".txt,.json"
+                          onChange={uploadChatHistory}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => document.getElementById('chatHistoryUpload').click()}
+                          disabled={uploadingChatHistory}
+                          className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          {uploadingChatHistory ? 'Processing...' : 'Upload Chat History'}
+                        </button>
+                        <div className="flex-1">
+                          {chatHistoryStatus && (
+                            <p className="text-xs text-green-600">✓ {chatHistoryStatus}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-white rounded p-3">
-                      <p className="text-xs text-gray-700 font-medium mb-1">📱 How to export chat history:</p>
-                      <div className="text-xs text-gray-600 space-y-1">
-                        <p><strong>WhatsApp:</strong> Open chat → ⋮ → More → Export chat → Without media</p>
-                        <p><strong>LINE:</strong> Open chat → Settings → Export chat history → Text only</p>
+                      <div className="bg-white rounded p-3">
+                        <p className="text-xs text-gray-700 font-medium mb-1">📱 How to export chat history:</p>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <p><strong>WhatsApp:</strong> Open chat → ⋮ → More → Export chat → Without media</p>
+                          <p><strong>LINE:</strong> Open chat → Settings → Export chat history → Text only</p>
+                        </div>
                       </div>
+                      <p className="text-xs text-gray-500">
+                        Chat history is vectorized and stored securely to provide personalized AI responses for all users
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      Chat history is vectorized and stored securely to provide personalized AI responses
-                    </p>
                   </div>
-                </div>
+                )}
+
+                {user?.is_admin && (
+                  <div className="bg-yellow-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-800 mb-2">👑 Admin Dashboard</h4>
+                    <p className="text-sm text-gray-600 mb-3">Monitor user activity and system usage</p>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          setShowAdminModal(true);
+                          loadAdminData();
+                        }}
+                        className="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        View Admin Dashboard
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!user?.is_admin && (
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
+                    <p className="text-sm text-gray-600 mb-3">Enter admin secret key to gain admin privileges</p>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setShowAdminPromote(true)}
+                        className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        🔑 Promote to Admin
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-blue-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-800 mb-2">📊 Your Stats</h4>
@@ -2189,6 +2274,155 @@ const ConstipationReliefTracker = () => {
               <p className="text-xs text-gray-500 mt-2">
                 💡 For serious medical concerns, always consult your doctor.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Dashboard Modal */}
+      {showAdminModal && user?.is_admin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 bg-white border-b p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">👑 Admin Dashboard</h2>
+                <button
+                  onClick={() => setShowAdminModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* User Stats */}
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">👥 User Statistics</h3>
+                  {adminData.loading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+                      <p className="text-gray-600 mt-2">Loading...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {adminData.users.map(user => (
+                        <div key={user.id} className="bg-white rounded p-3 border">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-gray-800">{user.username}</span>
+                            <span className="text-xs text-gray-500">ID: {user.id}</span>
+                          </div>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p>📧 {user.email || 'No email'}</p>
+                            <p>📅 Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                            <p>📊 {user.days_tracked} days tracked, {user.total_bowel_movements} BMs, {user.total_notes} notes</p>
+                            <p>🕒 Last active: {user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'Never'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Activity Logs */}
+                <div className="bg-yellow-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">📋 Activity Logs</h3>
+                  {adminData.loading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full mx-auto"></div>
+                      <p className="text-gray-600 mt-2">Loading...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {adminData.logs.map(log => (
+                        <div key={log.id} className="bg-white rounded p-3 border text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-gray-800">{log.username}</span>
+                            <span className="text-gray-500">{new Date(log.created_at).toLocaleString()}</span>
+                          </div>
+                          <div className="text-gray-600">
+                            <span className="font-medium text-blue-600">{log.action}</span>
+                            {log.details && <span className="ml-2">- {log.details}</span>}
+                          </div>
+                          <div className="text-gray-400 mt-1">
+                            IP: {log.ip_address}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="mt-6">
+                <button
+                  onClick={loadAdminData}
+                  disabled={adminData.loading}
+                  className="bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {adminData.loading ? 'Loading...' : 'Refresh Data'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Promotion Modal */}
+      {showAdminPromote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-800">👑 Promote to Admin</h2>
+                <button
+                  onClick={() => {
+                    setShowAdminPromote(false);
+                    setAdminSecret('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Admin Secret Key
+                  </label>
+                  <input
+                    type="password"
+                    value={adminSecret}
+                    onChange={(e) => setAdminSecret(e.target.value)}
+                    placeholder="Enter admin secret key"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Contact the system administrator for the secret key
+                  </p>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowAdminPromote(false);
+                      setAdminSecret('');
+                    }}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={promoteToAdmin}
+                    disabled={!adminSecret.trim()}
+                    className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Promote
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
