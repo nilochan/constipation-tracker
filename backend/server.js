@@ -1373,7 +1373,12 @@ app.get('/api/health', (req, res) => {
 
 // Serve React app for all non-API routes
 app.get('*', (req, res) => {
-  res.sendFile('index.html', { root: '../frontend/build' });
+  try {
+    res.sendFile('index.html', { root: '../frontend/build' });
+  } catch (error) {
+    console.error('Static file serve error:', error);
+    res.status(404).send('App not found');
+  }
 });
 
 // Error handling middleware
@@ -1382,10 +1387,21 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Start server with error handling
+try {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Health check available at /api/health`);
+  });
+  
+  server.on('error', (error) => {
+    console.error('Server startup error:', error);
+    process.exit(1);
+  });
+} catch (error) {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+}
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
