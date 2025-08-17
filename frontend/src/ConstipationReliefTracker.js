@@ -20,6 +20,11 @@ const ConstipationReliefTracker = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileEmail, setProfileEmail] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   // Bristol Stool Scale definitions with visual icons
   const bristolScale = [
@@ -163,6 +168,13 @@ const ConstipationReliefTracker = () => {
       loadProfile();
     }
   }, [isAuthenticated]);
+
+  // Load AI summaries when analytics tab is accessed
+  useEffect(() => {
+    if (activeTab === 'analytics' && isAuthenticated) {
+      loadAISummaries();
+    }
+  }, [activeTab, isAuthenticated, currentDate]);
 
   // Load analytics data when switching to analytics tab
   useEffect(() => {
@@ -461,6 +473,58 @@ const ConstipationReliefTracker = () => {
       setUploadingPhoto(false);
       // Clear the input
       event.target.value = '';
+    }
+  };
+
+  // AI Functions
+  const loadAISummaries = async () => {
+    setAiSummary(prev => ({ ...prev, loading: true }));
+    try {
+      const [dailyResult, weeklyResult] = await Promise.all([
+        ApiService.getDailySummary(currentDate),
+        ApiService.getWeeklySummary()
+      ]);
+      setAiSummary({
+        daily: dailyResult.summary,
+        weekly: weeklyResult.summary,
+        loading: false
+      });
+    } catch (error) {
+      console.error('Failed to load AI summaries:', error);
+      setAiSummary({
+        daily: "Great job tracking your health today! 🌟",
+        weekly: "Keep up the great work with your wellness journey! 💪",
+        loading: false
+      });
+    }
+  };
+
+  const sendChatMessage = async () => {
+    if (!currentMessage.trim() || chatLoading) return;
+
+    const userMessage = { role: 'user', content: currentMessage, timestamp: new Date() };
+    setChatMessages(prev => [...prev, userMessage]);
+    setCurrentMessage('');
+    setChatLoading(true);
+
+    try {
+      const response = await ApiService.chatWithAI(currentMessage);
+      const aiMessage = { 
+        role: 'assistant', 
+        content: response.response, 
+        timestamp: new Date(response.timestamp) 
+      };
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Failed to send chat message:', error);
+      const errorMessage = { 
+        role: 'assistant', 
+        content: "I'm having trouble responding right now. Please try again later! 💙", 
+        timestamp: new Date() 
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -1374,6 +1438,76 @@ const ConstipationReliefTracker = () => {
               </div>
             </div>
 
+            {/* AI Health Summary */}
+            <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-xl p-6 shadow-sm border border-green-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-lg">🤖</span>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">AI Health Insights</h2>
+                    <p className="text-sm text-gray-600">Personalized analysis of your wellness data</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={loadAISummaries}
+                    disabled={aiSummary.loading}
+                    className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {aiSummary.loading ? '🔄 Analyzing...' : '🔄 Refresh'}
+                  </button>
+                  <button
+                    onClick={() => setShowChatModal(true)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    💬 Ask AI
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Daily Summary */}
+                <div className="bg-white rounded-lg p-5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">📅</span>
+                    <h3 className="text-lg font-semibold text-gray-800">Today's Summary</h3>
+                  </div>
+                  {aiSummary.loading ? (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <div className="animate-spin w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full"></div>
+                      <span className="text-sm">AI analyzing your day...</span>
+                    </div>
+                  ) : (
+                    <p className="text-gray-700 leading-relaxed">{aiSummary.daily}</p>
+                  )}
+                </div>
+
+                {/* Weekly Summary */}
+                <div className="bg-white rounded-lg p-5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">📊</span>
+                    <h3 className="text-lg font-semibold text-gray-800">This Week's Progress</h3>
+                  </div>
+                  {aiSummary.loading ? (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                      <span className="text-sm">AI reviewing your week...</span>
+                    </div>
+                  ) : (
+                    <p className="text-gray-700 leading-relaxed">{aiSummary.weekly}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 text-center">
+                <p className="text-xs text-gray-500">
+                  💡 AI insights are based on your tracked data. Always consult your doctor for medical advice.
+                </p>
+              </div>
+            </div>
+
             {/* Bristol Scale Distribution - Redesigned for Better UX */}
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 shadow-sm border border-purple-100">
               <div className="flex items-center gap-3 mb-6">
@@ -1615,7 +1749,11 @@ const ConstipationReliefTracker = () => {
                               })}
                             </span>
                             <span className="text-xs text-gray-500">
-                              {new Date(note.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(note.created_at).toLocaleString([], { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                              })}
                             </span>
                           </div>
                           <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
@@ -1809,6 +1947,90 @@ const ConstipationReliefTracker = () => {
         onClose={() => setShowFoodModal(false)}
         onSave={addMeal}
       />
+
+      {/* AI Chat Modal */}
+      {showChatModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm">🤖</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-800">AI Health Assistant</h2>
+                </div>
+                <button
+                  onClick={() => setShowChatModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-96">
+              {chatMessages.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-3">🤖</div>
+                  <div className="text-gray-600 text-sm mb-2">Hi! I'm your AI health assistant.</div>
+                  <div className="text-gray-500 text-xs">Ask me about hydration, digestive health, or wellness tips!</div>
+                </div>
+              )}
+              
+              {chatMessages.map((message, index) => (
+                <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.role === 'user' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <p className="text-sm">{message.content}</p>
+                    <p className="text-xs opacity-70 mt-1">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                      <span className="text-sm">AI is typing...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={currentMessage}
+                  onChange={(e) => setCurrentMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                  placeholder="Ask about digestive health, hydration, wellness tips..."
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  maxLength={500}
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={!currentMessage.trim() || chatLoading}
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                💡 For serious medical concerns, always consult your doctor.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

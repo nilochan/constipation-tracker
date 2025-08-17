@@ -10,6 +10,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -166,6 +167,7 @@ app.post('/api/login', [
 app.use('/api/data', authenticateToken);
 app.use('/api/analytics', authenticateToken);
 app.use('/api/profile', authenticateToken);
+app.use('/api/ai', authenticateToken);
 
 // Get daily data
 app.get('/api/data/:date', async (req, res) => {
@@ -686,6 +688,171 @@ app.get('/api/profile/export', async (req, res) => {
   } catch (error) {
     console.error('Export data error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// AI Summary and Chat using DeepSeek
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'your-deepseek-api-key';
+
+// Generate daily summary
+app.post('/api/ai/daily-summary', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { date } = req.body;
+    
+    // Get today's data
+    const dailyData = await db.get('SELECT * FROM daily_data WHERE user_id = ? AND date = ?', [userId, date]);
+    const bowelMovements = await db.all('SELECT * FROM bowel_movements WHERE user_id = ? AND date = ?', [userId, date]);
+    const symptoms = await db.get('SELECT * FROM symptoms WHERE user_id = ? AND date = ?', [userId, date]);
+    const notes = await db.all('SELECT * FROM daily_notes WHERE user_id = ? AND date = ?', [userId, date]);
+
+    const currentTime = new Date().toLocaleString('en-US', { 
+      timeZone: 'Asia/Singapore',
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+
+    const prompt = `You are a helpful health assistant analyzing daily health data. Current time: ${currentTime}
+
+Data for ${date}:
+- Water intake: ${dailyData?.water_glasses || 0} glasses
+- Mood: ${dailyData?.mood || 'Not recorded'}/5
+- Stress level: ${dailyData?.stress_level || 'Not recorded'}/5
+- Sleep quality: ${dailyData?.sleep_quality || 'Not recorded'}/5
+- Bowel movements: ${bowelMovements?.length || 0} recorded
+- Symptoms: Bloating ${symptoms?.bloating || 0}/5, Abdominal pain ${symptoms?.abdominal_pain || 0}/5
+- Daily notes: ${notes?.map(n => n.note).join('; ') || 'None'}
+
+Provide a brief, encouraging daily health summary (2-3 sentences) focusing on positives and gentle suggestions for improvement. Be warm and supportive.`;
+
+    const response = await axios.post(DEEPSEEK_API_URL, {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 200,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    res.json({ summary: response.data.choices[0].message.content });
+  } catch (error) {
+    console.error('AI Summary error:', error.response?.data || error.message);
+    res.json({ summary: "Great job tracking your health today! Keep up the good work with hydration and mindful wellness monitoring. 🌟" });
+  }
+});
+
+// Generate weekly summary
+app.post('/api/ai/weekly-summary', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get past 7 days data
+    const weekData = await db.all(`
+      SELECT dd.date, dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality,
+             COUNT(bm.id) as bowel_movements
+      FROM daily_data dd
+      LEFT JOIN bowel_movements bm ON dd.user_id = bm.user_id AND dd.date = bm.date
+      WHERE dd.user_id = ? AND dd.date >= date('now', '-7 days')
+      GROUP BY dd.date
+      ORDER BY dd.date DESC
+    `, [userId]);
+
+    const avgWater = weekData.reduce((sum, day) => sum + (day.water_glasses || 0), 0) / 7;
+    const avgMood = weekData.filter(d => d.mood).reduce((sum, day) => sum + day.mood, 0) / weekData.filter(d => d.mood).length || 0;
+    const totalBM = weekData.reduce((sum, day) => sum + (day.bowel_movements || 0), 0);
+
+    const prompt = `You are a helpful health assistant providing weekly health insights.
+
+Past 7 days summary:
+- Average water intake: ${avgWater.toFixed(1)} glasses/day
+- Average mood: ${avgMood.toFixed(1)}/5
+- Total bowel movements: ${totalBM}
+- Days tracked: ${weekData.length}
+
+Provide a supportive weekly health summary (3-4 sentences) with gentle insights and encouragement for the coming week.`;
+
+    const response = await axios.post(DEEPSEEK_API_URL, {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 250,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    res.json({ summary: response.data.choices[0].message.content });
+  } catch (error) {
+    console.error('AI Weekly Summary error:', error.response?.data || error.message);
+    res.json({ summary: "You've made great progress this week with your health tracking! Keep staying mindful of your wellness journey. 🌟" });
+  }
+});
+
+// Chat with AI assistant
+app.post('/api/ai/chat', [
+  body('message').isLength({ min: 1, max: 500 }).trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = req.user.userId;
+    const { message } = req.body;
+
+    // Get recent user data for context
+    const recentData = await db.get(`
+      SELECT dd.water_glasses, dd.mood, dd.stress_level, COUNT(bm.id) as recent_bowel_movements
+      FROM daily_data dd
+      LEFT JOIN bowel_movements bm ON dd.user_id = bm.user_id AND dd.date = bm.date
+      WHERE dd.user_id = ? AND dd.date >= date('now', '-3 days')
+      GROUP BY dd.user_id
+    `, [userId]);
+
+    const contextPrompt = `You are a supportive health assistant for a constipation tracking app. 
+
+User's recent health context:
+- Recent water intake: ${recentData?.water_glasses || 0} glasses
+- Recent mood: ${recentData?.mood || 'Not recorded'}/5
+- Recent bowel movements: ${recentData?.recent_bowel_movements || 0}
+
+User question: "${message}"
+
+Provide a helpful, supportive response (2-3 sentences). Focus on digestive health, hydration, and general wellness. Always be encouraging and suggest consulting a doctor for serious concerns.`;
+
+    const response = await axios.post(DEEPSEEK_API_URL, {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: contextPrompt }],
+      max_tokens: 200,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    res.json({ 
+      response: response.data.choices[0].message.content,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('AI Chat error:', error.response?.data || error.message);
+    res.json({ 
+      response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

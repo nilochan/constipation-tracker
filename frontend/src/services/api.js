@@ -177,6 +177,27 @@ class ApiService {
     return response.json();
   }
 
+  // AI Services
+  async getDailySummary(date) {
+    return this.request('/ai/daily-summary', {
+      method: 'POST',
+      body: JSON.stringify({ date }),
+    });
+  }
+
+  async getWeeklySummary() {
+    return this.request('/ai/weekly-summary', {
+      method: 'POST',
+    });
+  }
+
+  async chatWithAI(message) {
+    return this.request('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
   isAuthenticated() {
     return !!this.token;
   }
