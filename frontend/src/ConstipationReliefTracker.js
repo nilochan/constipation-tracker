@@ -20,6 +20,8 @@ const ConstipationReliefTracker = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileEmail, setProfileEmail] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingChatHistory, setUploadingChatHistory] = useState(false);
+  const [chatHistoryStatus, setChatHistoryStatus] = useState('');
   const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -471,6 +473,96 @@ const ConstipationReliefTracker = () => {
       alert('Failed to upload photo. Please try again.');
     } finally {
       setUploadingPhoto(false);
+      // Clear the input
+      event.target.value = '';
+    }
+  };
+
+  const uploadChatHistory = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    // Validate file type
+    if (!file.name.match(/\.(txt|json)$/i)) {
+      alert('Please select a text (.txt) or JSON (.json) file');
+      return;
+    }
+
+    setUploadingChatHistory(true);
+    setChatHistoryStatus('');
+    
+    try {
+      const text = await file.text();
+      let chatHistory = [];
+      let source = 'other';
+
+      // Parse WhatsApp chat export
+      if (file.name.toLowerCase().includes('whatsapp') || text.includes('Messages and calls are end-to-end encrypted')) {
+        source = 'whatsapp';
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          // WhatsApp format: [DD/MM/YYYY, HH:MM:SS] Contact Name: Message
+          const match = line.match(/^\[(.+?)\] (.+?): (.+)$/);
+          if (match) {
+            const [, timestamp, sender, message] = match;
+            chatHistory.push({
+              timestamp: timestamp,
+              sender: sender.trim(),
+              message: message.trim()
+            });
+          }
+        }
+      }
+      // Parse LINE chat export
+      else if (file.name.toLowerCase().includes('line') || text.includes('Line chat history')) {
+        source = 'line';
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          // LINE format may vary, try common patterns
+          const match = line.match(/^(.+?)\t(.+?)\t(.+)$/) || line.match(/^(.+?) (.+?): (.+)$/);
+          if (match) {
+            const [, timestamp, sender, message] = match;
+            chatHistory.push({
+              timestamp: timestamp.trim(),
+              sender: sender.trim(),
+              message: message.trim()
+            });
+          }
+        }
+      }
+      // Try JSON format
+      else if (file.name.toLowerCase().endsWith('.json')) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) {
+            chatHistory = parsed;
+          }
+        } catch (e) {
+          throw new Error('Invalid JSON format');
+        }
+      }
+
+      if (chatHistory.length === 0) {
+        throw new Error('No chat messages found. Please check the file format.');
+      }
+
+      // Upload to backend
+      const response = await ApiService.uploadChatHistory(chatHistory, source);
+      setChatHistoryStatus(`${response.processed} messages processed from ${source}`);
+      
+    } catch (error) {
+      console.error('Failed to upload chat history:', error);
+      alert(`Failed to upload chat history: ${error.message}`);
+    } finally {
+      setUploadingChatHistory(false);
       // Clear the input
       event.target.value = '';
     }
@@ -1002,6 +1094,27 @@ const ConstipationReliefTracker = () => {
         {/* Tab Content */}
         {activeTab === 'today' && (
           <div className="space-y-4">
+            {/* AI Assistant Quick Access */}
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 shadow-sm border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm">🤖</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">AI Health Assistant</h3>
+                    <p className="text-sm text-gray-600">Ask questions about digestive health, wellness tips, or concerns</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowChatModal(true)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg"
+                >
+                  💬 Ask AI
+                </button>
+              </div>
+            </div>
+
             {/* Daily Wellness Check */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
@@ -1014,22 +1127,33 @@ const ConstipationReliefTracker = () => {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <label className="font-medium text-gray-800 mb-3 block">How's your mood?</label>
                   <div className="flex gap-2 justify-center mb-3">
-                    {[1, 2, 3, 4, 5].map(mood => (
-                      <button
-                        key={mood}
-                        onClick={() => updateDailyData({ mood })}
-                        className={`p-2 rounded-lg transition-colors ${
-                          currentData.mood === mood 
-                            ? 'bg-blue-500 text-white' 
-                            : 'bg-white hover:bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {mood === 1 ? <Frown size={20} /> :
-                         mood === 2 ? <Frown size={20} /> :
-                         mood === 3 ? <Meh size={20} /> :
-                         mood === 4 ? <Smile size={20} /> : <Smile size={20} />}
-                      </button>
-                    ))}
+                    {[1, 2, 3, 4, 5].map(mood => {
+                      const isSelected = currentData.mood === mood;
+                      const moodConfig = {
+                        1: { color: 'text-red-500', bgColor: 'bg-red-100 hover:bg-red-200', selectedBg: 'bg-red-500' },
+                        2: { color: 'text-orange-500', bgColor: 'bg-orange-100 hover:bg-orange-200', selectedBg: 'bg-orange-500' },
+                        3: { color: 'text-yellow-500', bgColor: 'bg-yellow-100 hover:bg-yellow-200', selectedBg: 'bg-yellow-500' },
+                        4: { color: 'text-green-500', bgColor: 'bg-green-100 hover:bg-green-200', selectedBg: 'bg-green-500' },
+                        5: { color: 'text-emerald-500', bgColor: 'bg-emerald-100 hover:bg-emerald-200', selectedBg: 'bg-emerald-500' }
+                      };
+                      
+                      return (
+                        <button
+                          key={mood}
+                          onClick={() => updateDailyData({ mood })}
+                          className={`p-2 rounded-lg transition-colors ${
+                            isSelected 
+                              ? `${moodConfig[mood].selectedBg} text-white shadow-md` 
+                              : `${moodConfig[mood].bgColor} ${moodConfig[mood].color}`
+                          }`}
+                        >
+                          {mood === 1 ? <Frown size={20} /> :
+                           mood === 2 ? <Frown size={20} /> :
+                           mood === 3 ? <Meh size={20} /> :
+                           mood === 4 ? <Smile size={20} /> : <Smile size={20} />}
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="text-center text-sm">
                     {currentData.mood ? 
@@ -1904,6 +2028,44 @@ const ConstipationReliefTracker = () => {
                   <p className="text-xs text-gray-400 mt-2">
                     Supported: JPEG, PNG, GIF (max 5MB)
                   </p>
+                </div>
+
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-800 mb-2">💬 Chat History Integration</h4>
+                  <p className="text-sm text-gray-600 mb-3">Upload WhatsApp/LINE chat history to enhance AI responses with personal context</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        id="chatHistoryUpload"
+                        accept=".txt,.json"
+                        onChange={uploadChatHistory}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => document.getElementById('chatHistoryUpload').click()}
+                        disabled={uploadingChatHistory}
+                        className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {uploadingChatHistory ? 'Processing...' : 'Upload Chat History'}
+                      </button>
+                      <div className="flex-1">
+                        {chatHistoryStatus && (
+                          <p className="text-xs text-green-600">✓ {chatHistoryStatus}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded p-3">
+                      <p className="text-xs text-gray-700 font-medium mb-1">📱 How to export chat history:</p>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <p><strong>WhatsApp:</strong> Open chat → ⋮ → More → Export chat → Without media</p>
+                        <p><strong>LINE:</strong> Open chat → Settings → Export chat history → Text only</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Chat history is vectorized and stored securely to provide personalized AI responses
+                    </p>
+                  </div>
                 </div>
 
                 <div className="bg-blue-50 rounded-lg p-4">

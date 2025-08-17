@@ -11,6 +11,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { Pinecone } = require('@pinecone-database/pinecone');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -695,6 +696,52 @@ app.get('/api/profile/export', async (req, res) => {
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'your-deepseek-api-key';
 
+// Pinecone configuration for chat history
+const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
+const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'health-chat-history';
+
+let pinecone = null;
+let pineconeIndex = null;
+
+// Initialize Pinecone if configured
+if (PINECONE_API_KEY) {
+  try {
+    pinecone = new Pinecone({
+      apiKey: PINECONE_API_KEY,
+    });
+    pineconeIndex = pinecone.index(PINECONE_INDEX_NAME);
+    console.log('Pinecone initialized successfully');
+  } catch (error) {
+    console.log('Pinecone not configured or failed to initialize:', error.message);
+  }
+}
+
+// Function to create embeddings using DeepSeek (or a simple hash for fallback)
+const createEmbedding = async (text) => {
+  try {
+    // Simple text processing for embedding simulation
+    // In production, you'd use a proper embedding model
+    const words = text.toLowerCase().split(/\s+/);
+    const embedding = new Array(384).fill(0); // 384-dimensional vector
+    
+    // Simple hash-based embedding simulation
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      for (let j = 0; j < word.length; j++) {
+        const charCode = word.charCodeAt(j);
+        embedding[j % 384] += charCode;
+      }
+    }
+    
+    // Normalize the vector
+    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    return embedding.map(val => magnitude > 0 ? val / magnitude : 0);
+  } catch (error) {
+    console.error('Error creating embedding:', error);
+    return new Array(384).fill(0);
+  }
+};
+
 // Generate daily summary
 app.post('/api/ai/daily-summary', async (req, res) => {
   try {
@@ -797,7 +844,62 @@ Provide a supportive weekly health summary (3-4 sentences) with gentle insights 
   }
 });
 
-// Chat with AI assistant
+// Upload and process chat history
+app.post('/api/ai/upload-chat-history', [
+  body('chatHistory').isArray({ min: 1 }),
+  body('source').isIn(['whatsapp', 'line', 'other'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = req.user.userId;
+    const { chatHistory, source } = req.body;
+
+    if (!pineconeIndex) {
+      return res.status(400).json({ error: 'Vector database not configured. Please set up Pinecone.' });
+    }
+
+    let processed = 0;
+    const batchSize = 10;
+
+    for (let i = 0; i < chatHistory.length; i += batchSize) {
+      const batch = chatHistory.slice(i, i + batchSize);
+      const vectors = [];
+
+      for (const chat of batch) {
+        const embedding = await createEmbedding(chat.message);
+        vectors.push({
+          id: `${userId}-${source}-${Date.now()}-${processed}`,
+          values: embedding,
+          metadata: {
+            userId: userId,
+            source: source,
+            sender: chat.sender,
+            message: chat.message,
+            timestamp: chat.timestamp,
+            type: 'chat_history'
+          }
+        });
+        processed++;
+      }
+
+      await pineconeIndex.upsert(vectors);
+    }
+
+    res.json({ 
+      message: `Successfully processed ${processed} chat messages from ${source}`,
+      processed: processed 
+    });
+  } catch (error) {
+    console.error('Chat history upload error:', error);
+    res.status(500).json({ error: 'Failed to process chat history' });
+  }
+});
+
+// Chat with AI assistant (enhanced with chat history context)
 app.post('/api/ai/chat', [
   body('message').isLength({ min: 1, max: 500 }).trim()
 ], async (req, res) => {
@@ -819,12 +921,40 @@ app.post('/api/ai/chat', [
       GROUP BY dd.user_id
     `, [userId]);
 
+    let chatHistoryContext = '';
+
+    // Search chat history if Pinecone is available
+    if (pineconeIndex) {
+      try {
+        const messageEmbedding = await createEmbedding(message);
+        const searchResults = await pineconeIndex.query({
+          vector: messageEmbedding,
+          topK: 3,
+          filter: { userId: userId },
+          includeMetadata: true
+        });
+
+        if (searchResults.matches && searchResults.matches.length > 0) {
+          const relevantChats = searchResults.matches
+            .filter(match => match.score > 0.5) // Only include relevant matches
+            .map(match => `${match.metadata.sender}: ${match.metadata.message}`)
+            .join('\n');
+          
+          if (relevantChats) {
+            chatHistoryContext = `\n\nRelevant past conversations:\n${relevantChats}`;
+          }
+        }
+      } catch (error) {
+        console.log('Chat history search failed:', error.message);
+      }
+    }
+
     const contextPrompt = `You are a supportive health assistant for a constipation tracking app. 
 
 User's recent health context:
 - Recent water intake: ${recentData?.water_glasses || 0} glasses
 - Recent mood: ${recentData?.mood || 'Not recorded'}/5
-- Recent bowel movements: ${recentData?.recent_bowel_movements || 0}
+- Recent bowel movements: ${recentData?.recent_bowel_movements || 0}${chatHistoryContext}
 
 User question: "${message}"
 
@@ -845,7 +975,8 @@ Provide a helpful, supportive response (2-3 sentences). Focus on digestive healt
 
     res.json({ 
       response: response.data.choices[0].message.content,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      usedChatHistory: !!chatHistoryContext
     });
   } catch (error) {
     console.error('AI Chat error:', error.response?.data || error.message);

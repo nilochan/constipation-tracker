@@ -177,6 +177,13 @@ class ApiService {
     return response.json();
   }
 
+  async uploadChatHistory(chatHistory, source) {
+    return this.request('/ai/upload-chat-history', {
+      method: 'POST',
+      body: JSON.stringify({ chatHistory, source }),
+    });
+  }
+
   // AI Services
   async getDailySummary(date) {
     return this.request('/ai/daily-summary', {
