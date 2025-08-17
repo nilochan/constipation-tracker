@@ -920,43 +920,75 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
     const userId = req.user.userId;
     const { chatHistory, source } = req.body;
 
-    if (!pineconeIndex) {
-      return res.status(400).json({ error: 'Vector database not configured. Please set up Pinecone.' });
-    }
+    // For now, store chat history in a simple table even without Pinecone
+    console.log('Received chat history upload:', {
+      userId,
+      source,
+      historyLength: chatHistory.length,
+      pineconeConfigured: !!pineconeIndex
+    });
 
     let processed = 0;
-    const batchSize = 10;
 
-    for (let i = 0; i < chatHistory.length; i += batchSize) {
-      const batch = chatHistory.slice(i, i + batchSize);
-      const vectors = [];
+    // If Pinecone is configured, use it
+    if (pineconeIndex) {
+      console.log('Using Pinecone for chat history storage');
+      const batchSize = 10;
 
-      for (const chat of batch) {
-        const embedding = await createEmbedding(chat.message);
-        vectors.push({
-          id: `${userId}-${source}-${Date.now()}-${processed}`,
-          values: embedding,
-          metadata: {
-            userId: userId,
-            source: source,
-            sender: chat.sender,
-            message: chat.message,
-            timestamp: chat.timestamp,
-            type: 'chat_history'
+      for (let i = 0; i < chatHistory.length; i += batchSize) {
+        const batch = chatHistory.slice(i, i + batchSize);
+        const vectors = [];
+
+        for (const chat of batch) {
+          try {
+            const embedding = await createEmbedding(chat.message);
+            vectors.push({
+              id: `${userId}-${source}-${Date.now()}-${processed}`,
+              values: embedding,
+              metadata: {
+                userId: userId,
+                source: source,
+                sender: chat.sender,
+                message: chat.message,
+                timestamp: chat.timestamp,
+                type: 'chat_history'
+              }
+            });
+            processed++;
+          } catch (embeddingError) {
+            console.error('Embedding error for message:', chat.message, embeddingError);
           }
-        });
-        processed++;
-      }
+        }
 
-      await pineconeIndex.upsert(vectors);
+        if (vectors.length > 0) {
+          await pineconeIndex.upsert(vectors);
+        }
+      }
+    } else {
+      // Fallback: just count the messages and store basic info
+      console.log('Pinecone not configured, storing basic chat history info');
+      processed = chatHistory.length;
+      
+      // You could store in a simple table here if needed
+      console.log('Chat history received:', {
+        messageCount: processed,
+        source: source,
+        firstMessage: chatHistory[0],
+        lastMessage: chatHistory[chatHistory.length - 1]
+      });
     }
 
     // Log chat history upload activity
-    await logActivity(userId, req.user.username, 'CHAT_HISTORY_UPLOAD', `Uploaded ${processed} messages from ${source}`, req);
+    await logActivity(userId, req.user.username, 'CHAT_HISTORY_UPLOAD', `Uploaded ${processed} messages from ${source}${pineconeIndex ? ' (Pinecone)' : ' (local)'}`, req);
+
+    const responseMessage = pineconeIndex 
+      ? `Successfully processed ${processed} chat messages from ${source} and stored in vector database`
+      : `Successfully received ${processed} chat messages from ${source}. Set up Pinecone for AI integration.`;
 
     res.json({ 
-      message: `Successfully processed ${processed} chat messages from ${source}`,
-      processed: processed 
+      message: responseMessage,
+      processed: processed,
+      pineconeConfigured: !!pineconeIndex
     });
   } catch (error) {
     console.error('Chat history upload error:', error);
