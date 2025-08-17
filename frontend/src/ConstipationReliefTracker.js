@@ -633,6 +633,7 @@ const ConstipationReliefTracker = () => {
   };
 
   const emergencyAdminPromotion = async () => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm(`Are you sure you want to promote "${user.username}" to admin using emergency method?`)) {
       return;
     }
