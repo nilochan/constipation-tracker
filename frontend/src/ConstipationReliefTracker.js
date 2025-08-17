@@ -181,7 +181,8 @@ const ConstipationReliefTracker = () => {
     if (activeTab === 'analytics' && isAuthenticated) {
       loadAISummaries();
     }
-  }, [activeTab, isAuthenticated, currentDate, loadAISummaries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated, currentDate]);
 
   // Load analytics data when switching to analytics tab
   useEffect(() => {
