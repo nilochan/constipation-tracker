@@ -3,7 +3,8 @@
 A personal health tracking application designed to help monitor daily wellness, bowel movements, hydration, and other health metrics.
 
 ## Deployment Status
-- Latest update: August 17, 2025 - Railway deployment optimization
+- Latest update: August 17, 2025 - Fixed Railway build configuration
+- Build issues resolved: Root package.json removed, explicit dependency installation
 
 ## Features
 
