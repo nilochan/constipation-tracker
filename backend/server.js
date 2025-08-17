@@ -1307,6 +1307,33 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
+// Refresh user data (get updated user info)
+app.get('/api/user/refresh', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await db.get('SELECT id, username, email, profile_photo, is_admin, created_at FROM users WHERE id = ?', [userId]);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Generate new token with updated admin status
+    const newToken = jwt.sign(
+      { userId: user.id, username: user.username, isAdmin: user.is_admin },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      token: newToken,
+      user: user
+    });
+  } catch (error) {
+    console.error('Refresh user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });

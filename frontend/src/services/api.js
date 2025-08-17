@@ -225,6 +225,10 @@ class ApiService {
     });
   }
 
+  async refreshUserData() {
+    return this.request('/user/refresh');
+  }
+
   isAuthenticated() {
     return !!this.token;
   }

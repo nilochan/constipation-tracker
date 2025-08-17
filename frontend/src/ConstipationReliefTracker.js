@@ -686,11 +686,26 @@ const ConstipationReliefTracker = () => {
       if (response.ok) {
         alert(data.message);
         
-        // If the promoted user is the current user, update state
+        // If the promoted user is the current user, refresh their token
         if (user && user.username === username.trim()) {
-          const updatedUser = { ...user, is_admin: true };
-          setUser(updatedUser);
-          setProfileData(updatedUser);
+          try {
+            const refreshData = await ApiService.refreshUserData();
+            
+            // Update token and user data
+            ApiService.setToken(refreshData.token);
+            setUser(refreshData.user);
+            setProfileData(refreshData.user);
+            
+            alert('Token refreshed! You now have admin access.');
+          } catch (refreshError) {
+            console.error('Failed to refresh token:', refreshError);
+            alert('You are now admin, but please refresh the page to access admin features.');
+            
+            // Fallback: update local state
+            const updatedUser = { ...user, is_admin: true };
+            setUser(updatedUser);
+            setProfileData(updatedUser);
+          }
         }
       } else {
         alert(`Error: ${data.error}`);
