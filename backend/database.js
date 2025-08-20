@@ -19,6 +19,14 @@ class Database {
     console.log('- Final dbPath:', dbPath);
     console.log('- Data directory:', dataDir);
     console.log('- Directory exists:', fs.existsSync(dataDir));
+    console.log('- Database file exists:', fs.existsSync(dbPath));
+    
+    if (fs.existsSync(dbPath)) {
+      const stats = fs.statSync(dbPath);
+      console.log('- Database file size:', stats.size, 'bytes');
+      console.log('- Database created:', stats.birthtime);
+      console.log('- Database modified:', stats.mtime);
+    }
     
     this.db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
@@ -32,6 +40,24 @@ class Database {
   }
 
   initializeTables() {
+    console.log('🔧 Initializing database tables...');
+    
+    // Check if users table already has data
+    this.db.get("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
+      if (!err) {
+        if (row.count > 0) {
+          console.log('📋 Users table already exists');
+          this.db.get("SELECT COUNT(*) as count FROM users", (err, userRow) => {
+            if (!err) {
+              console.log('👤 Existing users in database:', userRow.count);
+            }
+          });
+        } else {
+          console.log('🆕 Creating new users table');
+        }
+      }
+    });
+    
     // Users table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS users (
