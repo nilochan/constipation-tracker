@@ -6,8 +6,8 @@ const nextCtx = nextCanvas.getContext('2d');
 
 // Game constants
 const BOARD_WIDTH = 10;
-const BOARD_HEIGHT = 15; // Reduced from 20 to 15 to trim bottom 40%
-const BLOCK_SIZE = 32;
+const BOARD_HEIGHT = 15; // Reduced from 20 to 15 to fit visible area
+const BLOCK_SIZE = 24; // Reduced from 32 to 24 so 15 rows fit in 360px canvas
 
 // Game state
 let board = [];
@@ -416,7 +416,7 @@ function drawBlock(x, y, color, emoji = '') {
     
     // Draw emoji in center
     if (emoji) {
-        ctx.font = '16px Arial';
+        ctx.font = '12px Arial'; // Reduced from 16px to fit smaller blocks
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = 'black'; // Change to black for visibility on white background

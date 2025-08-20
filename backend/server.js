@@ -1077,44 +1077,57 @@ app.post('/api/ai/chat', [
     const userId = req.user.userId;
     const { message } = req.body;
 
-    // Get user info for personalized responses
-    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    // Get user info for personalized responses (with error handling)
+    let user, recentData, recentBMs, recentSymptoms, recentNotes;
     
-    // Get comprehensive recent user data for context
-    const recentData = await db.get(`
-      SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality
-      FROM daily_data dd
-      WHERE dd.user_id = ? AND dd.date >= date('now', '-7 days')
-      ORDER BY dd.date DESC
-      LIMIT 1
-    `, [userId]);
-    
-    // Get detailed bowel movement data with notes
-    const recentBMs = await db.all(`
-      SELECT bristol_scale, timing, notes, date
-      FROM bowel_movements 
-      WHERE user_id = ? AND date >= date('now', '-7 days')
-      ORDER BY date DESC, timing DESC
-      LIMIT 5
-    `, [userId]);
-    
-    // Get recent symptoms
-    const recentSymptoms = await db.get(`
-      SELECT bloating, abdominal_pain, date
-      FROM symptoms 
-      WHERE user_id = ? AND date >= date('now', '-7 days')
-      ORDER BY date DESC
-      LIMIT 1
-    `, [userId]);
-    
-    // Get recent notes/remarks
-    const recentNotes = await db.all(`
-      SELECT note, date
-      FROM daily_notes 
-      WHERE user_id = ? AND date >= date('now', '-7 days')
-      ORDER BY date DESC
-      LIMIT 3
-    `, [userId]);
+    try {
+      user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+      
+      // Get recent user data for context
+      recentData = await db.get(`
+        SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality
+        FROM daily_data dd
+        WHERE dd.user_id = ? AND dd.date >= date('now', '-3 days')
+        ORDER BY dd.date DESC
+        LIMIT 1
+      `, [userId]);
+      
+      // Get recent bowel movements with notes
+      recentBMs = await db.all(`
+        SELECT bristol_scale, timing, notes, date
+        FROM bowel_movements 
+        WHERE user_id = ? AND date >= date('now', '-3 days')
+        ORDER BY date DESC
+        LIMIT 3
+      `, [userId]);
+      
+      // Get recent symptoms
+      recentSymptoms = await db.get(`
+        SELECT bloating, abdominal_pain, date
+        FROM symptoms 
+        WHERE user_id = ? AND date >= date('now', '-3 days')
+        ORDER BY date DESC
+        LIMIT 1
+      `, [userId]);
+      
+      // Get recent notes
+      recentNotes = await db.all(`
+        SELECT note, date
+        FROM daily_notes 
+        WHERE user_id = ? AND date >= date('now', '-3 days')
+        ORDER BY date DESC
+        LIMIT 3
+      `, [userId]);
+      
+    } catch (dbError) {
+      console.log('Database query error:', dbError);
+      // Fallback to basic data
+      user = { username: 'there' };
+      recentData = {};
+      recentBMs = [];
+      recentSymptoms = {};
+      recentNotes = [];
+    }
 
     let chatHistoryContext = '';
 
@@ -1144,14 +1157,16 @@ app.post('/api/ai/chat', [
       }
     }
 
-    // Format detailed context information
-    const bmSummary = recentBMs.map(bm => 
-      `${bm.date}: Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
-    ).join('\n') || 'No recent bowel movements recorded';
+    // Format detailed context information with safety checks
+    const bmSummary = (recentBMs && recentBMs.length > 0) ? 
+      recentBMs.map(bm => 
+        `${bm.date}: Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
+      ).join('\n') : 'No recent bowel movements recorded';
     
-    const notesSummary = recentNotes.map(note => 
-      `${note.date}: ${note.note}`
-    ).join('\n') || 'No recent notes/remarks';
+    const notesSummary = (recentNotes && recentNotes.length > 0) ?
+      recentNotes.map(note => 
+        `${note.date}: ${note.note}`
+      ).join('\n') : 'No recent notes/remarks';
 
     const contextPrompt = `You are a supportive health assistant for ${user?.username || 'the user'}. You have access to their complete health tracking data.
 
