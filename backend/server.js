@@ -851,7 +851,7 @@ app.post('/api/ai/daily-summary', async (req, res) => {
 Data for ${date}:
 - Water intake: ${dailyData?.water_glasses || 0} glasses
 - Mood: ${dailyData?.mood || 'Not recorded'}/5  
-- Stress level: ${dailyData?.stress_level || 'Not recorded'}/5
+- Stress level: ${dailyData?.stress_level || 'Not recorded'}/10
 - Sleep quality: ${dailyData?.sleep_quality || 'Not recorded'}/5
 - Bowel movements: ${bmDetails}
 - Symptoms: Bloating ${symptoms?.bloating || 0}/5, Abdominal pain ${symptoms?.abdominal_pain || 0}/5
@@ -1215,24 +1215,20 @@ app.post('/api/ai/chat', [
         `${note.date}: ${note.note}`
       ).join('\n') : 'No recent notes/remarks';
 
-    const contextPrompt = `You are a supportive health assistant for ${user?.username || 'the user'}. You have access to their health tracking data.
+    const contextPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. You have access to their health tracking data.
 
-${user?.username || 'User'}'s Health Context:
-- Most recent water intake: ${recentData?.water_glasses || 'No data'} glasses${recentData?.date ? ' on ' + recentData.date : ''}
-- Most recent mood: ${recentData?.mood || 'Not recorded'}/5
-- Most recent stress level: ${recentData?.stress_level || 'Not recorded'}/10  
-- Most recent sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
-- Recent symptoms: Bloating ${recentSymptoms?.bloating || 'Not recorded'}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 'Not recorded'}/5
-
-Recent Bowel Movements:
-${bmSummary}
-
-Recent Notes/Remarks:
-${notesSummary}${chatHistoryContext}
+Health Data for ${recentData?.date || 'today'}:
+- Water intake: ${recentData?.water_glasses || 0} glasses
+- Mood: ${recentData?.mood || 'Not recorded'}/5
+- Stress level: ${recentData?.stress_level || 'Not recorded'}/10
+- Sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
+- Bowel movements: ${bmSummary}
+- Symptoms: Bloating ${recentSymptoms?.bloating || 0}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 0}/5
+- Notes: ${notesSummary}${chatHistoryContext}
 
 User question: "${message}"
 
-IMPORTANT: If the user has data recorded, reference it specifically. If they have no recent data, encourage them to start tracking but still answer their general health question if possible. Don't assume they have no data - check what's actually provided above. Provide helpful, supportive responses (2-3 sentences). Always be encouraging.`;
+Please answer their question using their specific data shown above. Be supportive and reference their actual numbers when relevant. Keep response to 2-3 sentences.`;
 
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
