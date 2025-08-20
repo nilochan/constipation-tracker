@@ -30,6 +30,7 @@ const ConstipationReliefTracker = () => {
   const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
+  const [showGameFullscreen, setShowGameFullscreen] = useState(false);
   const [currentMessage, setCurrentMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -2180,36 +2181,59 @@ const ConstipationReliefTracker = () => {
                 <p className="text-gray-600">Take a break and play some games while tracking your health!</p>
               </div>
               
-              {/* Snake Game Container - Mobile Optimized */}
-              <div className="w-full bg-gray-50 rounded-lg p-2 sm:p-4" 
-                   style={{ 
-                     height: 'calc(100vh - 200px)', 
-                     minHeight: '600px', 
-                     maxHeight: '800px' 
-                   }}>
-                <iframe
-                  src="/snake-game/index.html"
-                  title="Pinko's Snake Game"
-                  className="w-full h-full border-0 rounded-lg"
-                  style={{ 
-                    height: '100%', 
-                    width: '100%', 
-                    background: '#f0f0f0',
-                    overflow: 'hidden'
-                  }}
-                  scrolling="no"
-                  onError={() => {
-                    console.log('Snake game failed to load');
-                  }}
-                />
-              </div>
-              
-              <div className="text-center mt-4 text-sm text-gray-500">
-                🐍 Use arrow keys or on-screen buttons to play • Score points to unlock special photos!
+              {/* Game Preview with Play Button */}
+              <div className="text-center">
+                <div className="bg-gradient-to-br from-green-400 to-blue-500 rounded-lg p-8 mb-4">
+                  <div className="text-white mb-4">
+                    <div className="text-6xl mb-2">🐍</div>
+                    <h3 className="text-xl font-bold">Pinko's Snake Game</h3>
+                    <p className="text-sm opacity-90">Score points to unlock beautiful love photos!</p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setShowGameFullscreen(true)}
+                  className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg"
+                >
+                  🎮 Play Full Screen Game
+                </button>
+                
+                <div className="text-center mt-4 text-sm text-gray-500">
+                  🐍 Mobile optimized • Use arrow keys or touch controls • Love photos unlock with score!
+                </div>
               </div>
             </div>
           </div>
         )}
+
+      {/* Full Screen Game Modal */}
+      {showGameFullscreen && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* Exit Button */}
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              onClick={() => setShowGameFullscreen(false)}
+              className="bg-red-500 hover:bg-red-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors"
+              title="Exit Game"
+            >
+              ✕
+            </button>
+          </div>
+          
+          {/* Game Container */}
+          <iframe
+            src="/snake-game/index.html"
+            title="Pinko's Snake Game - Full Screen"
+            className="w-full h-full border-0"
+            style={{ 
+              background: '#f0f0f0'
+            }}
+            onError={() => {
+              console.log('Snake game failed to load');
+            }}
+          />
+        </div>
+      )}
 
       </div>
 
