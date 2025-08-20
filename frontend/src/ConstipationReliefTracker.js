@@ -2112,7 +2112,7 @@ const ConstipationReliefTracker = () => {
                         {dayData.stress_level && (
                           <div className="flex items-center gap-1">
                             <span>😰</span>
-                            <span>Stress: {dayData.stress_level}/5</span>
+                            <span>Stress: {dayData.stress_level}/10</span>
                           </div>
                         )}
                         {dayData.sleep_quality && (

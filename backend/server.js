@@ -1093,40 +1093,42 @@ app.post('/api/ai/chat', [
       user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
       
       // Get recent user data for context (extended time range)
+      // First try today's data, then fall back to recent data
+      const today = new Date().toISOString().split('T')[0];
       recentData = await db.get(`
         SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
         FROM daily_data dd
-        WHERE dd.user_id = ? AND dd.date >= date('now', '-14 days')
-        ORDER BY dd.date DESC
+        WHERE dd.user_id = ? AND (dd.date = ? OR dd.date >= date('now', '-14 days'))
+        ORDER BY CASE WHEN dd.date = ? THEN 0 ELSE 1 END, dd.date DESC
         LIMIT 1
-      `, [userId]);
+      `, [userId, today, today]);
       
       // Get recent bowel movements with notes (extended time range)
       recentBMs = await db.all(`
         SELECT bristol_scale, timing, notes, date
         FROM bowel_movements 
-        WHERE user_id = ? AND date >= date('now', '-14 days')
-        ORDER BY date DESC
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
         LIMIT 5
-      `, [userId]);
+      `, [userId, today, today]);
       
       // Get recent symptoms (extended time range)
       recentSymptoms = await db.get(`
         SELECT bloating, abdominal_pain, date
         FROM symptoms 
-        WHERE user_id = ? AND date >= date('now', '-14 days')
-        ORDER BY date DESC
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
         LIMIT 1
-      `, [userId]);
+      `, [userId, today, today]);
       
       // Get recent notes (extended time range)
       recentNotes = await db.all(`
         SELECT note, date
         FROM daily_notes 
-        WHERE user_id = ? AND date >= date('now', '-14 days')
-        ORDER BY date DESC
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
         LIMIT 5
-      `, [userId]);
+      `, [userId, today, today]);
       
     } catch (dbError) {
       console.log('Database query error:', dbError);
