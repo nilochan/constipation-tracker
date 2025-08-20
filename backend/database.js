@@ -1,45 +1,57 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { Pool } = require('pg');
 
-// Try different persistence paths for Railway
-const dbPath = process.env.DB_PATH || 
-               process.env.RAILWAY_VOLUME_MOUNT_PATH ? 
-               path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'database.db') :
-               './database.db';
+// Check if PostgreSQL is available (Railway provides DATABASE_URL)
+const usePostgreSQL = !!process.env.DATABASE_URL;
+const dbPath = './database.db'; // SQLite fallback path
 
 class Database {
   constructor() {
-    // Ensure data directory exists
-    const dataDir = path.dirname(dbPath);
-    const fs = require('fs');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-      console.log('Created data directory:', dataDir);
-    }
-    
     console.log('🗄️ Database configuration:');
-    console.log('- DB_PATH env var:', process.env.DB_PATH);
-    console.log('- Final dbPath:', dbPath);
-    console.log('- Data directory:', dataDir);
-    console.log('- Directory exists:', fs.existsSync(dataDir));
-    console.log('- Database file exists:', fs.existsSync(dbPath));
+    console.log('- DATABASE_URL available:', !!process.env.DATABASE_URL);
+    console.log('- Using PostgreSQL:', usePostgreSQL);
     
-    if (fs.existsSync(dbPath)) {
-      const stats = fs.statSync(dbPath);
-      console.log('- Database file size:', stats.size, 'bytes');
-      console.log('- Database created:', stats.birthtime);
-      console.log('- Database modified:', stats.mtime);
-    }
-    
-    this.db = new sqlite3.Database(dbPath, (err) => {
-      if (err) {
-        console.error('Error opening database:', err);
-        console.error('Attempted path:', dbPath);
-      } else {
-        console.log('✅ Connected to SQLite database at:', dbPath);
-        this.initializeTables();
+    if (usePostgreSQL) {
+      // Use PostgreSQL (Railway's persistent database)
+      this.pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      });
+      
+      console.log('✅ Connected to PostgreSQL database');
+      this.initializeTables();
+    } else {
+      // Fallback to SQLite for local development
+      const dataDir = path.dirname(dbPath);
+      const fs = require('fs');
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        console.log('Created data directory:', dataDir);
       }
-    });
+      
+      console.log('- Final dbPath:', dbPath);
+      console.log('- Data directory:', dataDir);
+      console.log('- Directory exists:', fs.existsSync(dataDir));
+      console.log('- Database file exists:', fs.existsSync(dbPath));
+      
+      if (fs.existsSync(dbPath)) {
+        const stats = fs.statSync(dbPath);
+        console.log('- Database file size:', stats.size, 'bytes');
+        console.log('- Database created:', stats.birthtime);
+        console.log('- Database modified:', stats.mtime);
+      }
+      
+      this.db = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+          console.error('Error opening database:', err);
+          console.error('Attempted path:', dbPath);
+        } else {
+          console.log('✅ Connected to SQLite database at:', dbPath);
+          this.initializeTables();
+        }
+      });
+    }
   }
 
   initializeTables() {
