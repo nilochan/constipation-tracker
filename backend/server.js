@@ -42,10 +42,16 @@ const logActivity = async (userId, username, action, details = null, req = null)
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
+// Create uploads directory in persistent volume if available, fallback to local
+const uploadsDir = process.env.DB_PATH ? 
+  path.join(path.dirname(process.env.DB_PATH), 'uploads') :  // Use same volume as database
+  path.join(__dirname, 'uploads');                          // Fallback for local dev
+
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory:', uploadsDir);
+} else {
+  console.log('📁 Using uploads directory:', uploadsDir);
 }
 
 // Configure multer for file uploads
