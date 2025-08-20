@@ -516,12 +516,33 @@ const ConstipationReliefTracker = () => {
         const lines = text.split('\n').filter(line => line.trim());
         
         for (const line of lines) {
-          // WhatsApp format: [DD/MM/YYYY, HH:MM:SS] Contact Name: Message
-          const match = line.match(/^\[(.+?)\] (.+?): (.+)$/);
-          if (match) {
-            const [, timestamp, sender, message] = match;
+          // Skip WhatsApp system messages
+          if (line.includes('Messages and calls are end-to-end encrypted') ||
+              line.includes('created group') ||
+              line.includes('added you') ||
+              line.includes('left') ||
+              line.includes('changed their phone number')) {
+            continue;
+          }
+          
+          // WhatsApp formats:
+          // [DD/MM/YYYY, HH:MM:SS] Contact Name: Message
+          // DD/MM/YY, HH:MM - Contact Name: Message
+          // M/D/YY, H:MM AM/PM - Contact Name: Message
+          const whatsappMatch = line.match(/^\[(.+?)\] (.+?): (.+)$/) ||     // [timestamp] name: message
+                               line.match(/^(.+?),\s*(.+?)\s*-\s*(.+?): (.+)$/) || // date, time - name: message
+                               line.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(.+?)\s*-\s*(.+?): (.+)$/); // simplified
+          
+          if (whatsappMatch) {
+            let timestamp, sender, message;
+            if (whatsappMatch.length === 4) {
+              [, timestamp, sender, message] = whatsappMatch;
+            } else {
+              [, timestamp, , sender, message] = whatsappMatch; // Skip time part for date,time format
+            }
+            
             chatHistory.push({
-              timestamp: timestamp,
+              timestamp: timestamp.trim(),
               sender: sender.trim(),
               message: message.trim()
             });
@@ -530,48 +551,57 @@ const ConstipationReliefTracker = () => {
       }
       // Parse LINE chat export or any text file
       else if (file.name.toLowerCase().includes('line') || text.includes('Line chat history') || file.name.toLowerCase().endsWith('.txt')) {
-        source = source || 'line';
+        source = file.name.toLowerCase().includes('line') ? 'line' : 'other';
         const lines = text.split('\n').filter(line => line.trim());
         
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (!line) continue;
           
-          // Skip header lines and date lines
+          // Skip header lines, date lines, and system messages
           if (line.includes('[LINE] Chat history') || 
               line.includes('Saved on:') ||
-              line.match(/^[A-Za-z]{3}, \d{1,2}\/\d{1,2}\/\d{4}$/)) {
+              line.includes('Members:') ||
+              line.match(/^[A-Za-z]{3}, \d{1,2}\/\d{1,2}\/\d{4}$/) ||
+              line.match(/^\d{4}年\d{1,2}月\d{1,2}日\([月火水木金土日]\)$/)) {
             continue;
           }
           
-          // LINE tab-separated format: time\tsender\tmessage
-          const tabMatch = line.match(/^(.+?)\t(.+?)\t(.+)$/);
-          if (tabMatch) {
-            const [, timestamp, sender, message] = tabMatch;
+          // LINE formats:
+          // HH:MM\tName\tMessage (tab-separated)
+          // HH:MM Name Message (space-separated)
+          // [HH:MM] Name: Message
+          const lineMatch = line.match(/^(.+?)\t(.+?)\t(.+)$/) ||               // tab format
+                           line.match(/^(\d{1,2}:\d{2})\s+(.+?)\s+(.+)$/) ||    // time name message
+                           line.match(/^\[(\d{1,2}:\d{2})\]\s*(.+?):\s*(.+)$/) || // [time] name: message
+                           line.match(/^(\d{1,2}:\d{2})\s*(.+?):\s*(.+)$/);     // time name: message
+          
+          if (lineMatch) {
+            const [, timestamp, sender, message] = lineMatch;
             chatHistory.push({
               timestamp: timestamp.trim(),
               sender: sender.trim(),
               message: message.trim()
             });
           }
-          // Other chat patterns
+          // Generic chat patterns
           else {
-            const otherMatch = line.match(/^(.+?) (.+?): (.+)$/) ||    // Timestamp Name: Message
-                              line.match(/^\[(.+?)\] (.+?): (.+)$/) || // [Timestamp] Name: Message
-                              line.match(/^(.+?) - (.+?): (.+)$/);     // Timestamp - Name: Message
+            const genericMatch = line.match(/^(.+?) (.+?): (.+)$/) ||    // Timestamp Name: Message
+                                line.match(/^\[(.+?)\] (.+?): (.+)$/) || // [Timestamp] Name: Message
+                                line.match(/^(.+?) - (.+?): (.+)$/);     // Timestamp - Name: Message
             
-            if (otherMatch) {
-              const [, timestamp, sender, message] = otherMatch;
+            if (genericMatch) {
+              const [, timestamp, sender, message] = genericMatch;
               chatHistory.push({
                 timestamp: timestamp.trim(),
                 sender: sender.trim(),
                 message: message.trim()
               });
-            } else if (line.length > 5) {
-              // If no pattern matches, treat as generic text (skip very short lines)
+            } else if (line.length > 5 && !line.match(/^[\d\s\-\/\:]+$/)) {
+              // If no pattern matches and it's not just numbers/dates, treat as message
               chatHistory.push({
                 timestamp: new Date().toISOString(),
-                sender: 'User',
+                sender: 'Unknown',
                 message: line
               });
             }

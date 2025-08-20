@@ -501,7 +501,7 @@ function restartGame() {
     direction = 'RIGHT';
     food = { x: Math.floor(Math.random() * 30) * box, y: Math.floor(Math.random() * 30) * box };
     score = 0;
-    lives = 300;
+    lives = 3;
     isImmune = false;
     baseSpeed = 200;
     currentSpeed = baseSpeed;
