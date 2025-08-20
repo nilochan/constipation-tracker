@@ -88,48 +88,18 @@ const PIECES = {
     }
 };
 
-// Romantic messages with Cony & Brown theme
+// Romantic messages with Cony & Brown theme (text only)
 const LOVE_MESSAGES = {
-    10: {
-        message: "🐰 Cony says: Great start, my love! Keep stacking those blocks! 💕",
-        image: "../snake-game/images/love1.jpg"
-    },
-    25: {
-        message: "🐻 Brown whispers: You're doing amazing! My heart is full of joy! 💝",
-        image: "../snake-game/images/love2.jpg"
-    },
-    50: {
-        message: "🐰💕 Cony & Brown together: Look at you go! We're so proud! 🌟",
-        image: "../snake-game/images/love3.jpg"
-    },
-    100: {
-        message: "🐻❤️ Brown's love note: Every cleared line is like a love letter to my heart! 💌",
-        image: "../snake-game/images/love4.jpg"
-    },
-    200: {
-        message: "🐰✨ Cony's magic: You're a Tetris wizard! Casting spells of love! 🪄💖",
-        image: "../snake-game/images/love5.jpg"
-    },
-    300: {
-        message: "🐻🏆 Brown celebrates: Champion level reached! You make my world complete! 🌍💕",
-        image: "../snake-game/images/love6.jpg"
-    },
-    500: {
-        message: "🐰🎉 Cony's party: INCREDIBLE! Let's dance under the stars tonight! 💃✨",
-        image: "../snake-game/images/love7.jpg"
-    },
-    750: {
-        message: "🐻👑 Brown crowns you: My queen of blocks! My heart belongs to you! 👸💖",
-        image: "../snake-game/images/love8.jpg"
-    },
-    1000: {
-        message: "🐰💫 Cony's dream: 1000 lines! You've reached the stars in my heart! 🌟❤️",
-        image: "../snake-game/images/love9.jpg"
-    },
-    1500: {
-        message: "🐻🌹 Brown's garden: Like flowers blooming, your skills grow more beautiful! 🌸💕",
-        image: "../snake-game/images/love10.jpg"
-    }
+    10: "🐰 Cony says: Great start, my love! Keep stacking those blocks! 💕",
+    25: "🐻 Brown whispers: You're doing amazing! My heart is full of joy! 💝",
+    50: "🐰💕 Cony & Brown together: Look at you go! We're so proud! 🌟",
+    100: "🐻❤️ Brown's love note: Every cleared line is like a love letter to my heart! 💌",
+    200: "🐰✨ Cony's magic: You're a Tetris wizard! Casting spells of love! 🪄💖",
+    300: "🐻🏆 Brown celebrates: Champion level reached! You make my world complete! 🌍💕",
+    500: "🐰🎉 Cony's party: INCREDIBLE! Let's dance under the stars tonight! 💃✨",
+    750: "🐻👑 Brown crowns you: My queen of blocks! My heart belongs to you! 👸💖",
+    1000: "🐰💫 Cony's dream: 1000 lines! You've reached the stars in my heart! 🌟❤️",
+    1500: "🐻🌹 Brown's garden: Like flowers blooming, your skills grow more beautiful! 🌸💕"
 };
 
 // Initialize game
@@ -308,22 +278,25 @@ function checkLoveMilestone() {
 }
 
 function showLoveMessage(milestone) {
-    const loveData = LOVE_MESSAGES[milestone];
+    const message = LOVE_MESSAGES[milestone];
+    
+    // Show love message as floating text instead of in sidebar
+    showTemporaryMessage(message, 4000); // Show for 4 seconds
+    
+    // Also show in love display panel without image
     const loveDisplay = document.getElementById('loveDisplay');
-    const loveImage = document.getElementById('loveImage');
     const loveMessage = document.getElementById('loveMessage');
     
-    loveImage.src = loveData.image;
-    loveMessage.textContent = loveData.message;
+    loveMessage.textContent = message;
     loveDisplay.classList.remove('hidden');
     
-    // Hide after 5 seconds
+    // Hide after 6 seconds
     setTimeout(() => {
         loveDisplay.classList.add('hidden');
-    }, 5000);
+    }, 6000);
 }
 
-function showTemporaryMessage(message) {
+function showTemporaryMessage(message, duration = 2000) {
     // Create temporary floating message
     const msgDiv = document.createElement('div');
     msgDiv.style.cssText = `
@@ -335,18 +308,23 @@ function showTemporaryMessage(message) {
         color: white;
         padding: 15px 25px;
         border-radius: 25px;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
         z-index: 9999;
         pointer-events: none;
-        animation: fadeInOut 2s ease-in-out;
+        animation: fadeInOut ${duration}ms ease-in-out;
+        text-align: center;
+        max-width: 80%;
+        line-height: 1.3;
     `;
     msgDiv.textContent = message;
     document.body.appendChild(msgDiv);
     
     setTimeout(() => {
-        document.body.removeChild(msgDiv);
-    }, 2000);
+        if (document.body.contains(msgDiv)) {
+            document.body.removeChild(msgDiv);
+        }
+    }, duration);
 }
 
 function movePiece(dx, dy) {
@@ -387,8 +365,8 @@ function rotate() {
 }
 
 function draw() {
-    // Clear canvas
-    ctx.fillStyle = 'rgba(30, 60, 114, 0.1)';
+    // Clear canvas with solid dark background
+    ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw board pieces with Cony & Brown theme
@@ -547,6 +525,8 @@ function startGame() {
     
     gameRunning = true;
     gamePaused = false;
+    dropTimer = 0; // Reset drop timer
+    lastTime = 0; // Reset last time
     document.getElementById('startBtn').textContent = '🎮 Running...';
     document.getElementById('pauseBtn').style.display = 'inline-block';
     
