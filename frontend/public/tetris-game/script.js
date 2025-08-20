@@ -5,9 +5,9 @@ const nextCanvas = document.getElementById('nextCanvas');
 const nextCtx = nextCanvas.getContext('2d');
 
 // Game constants
-const BOARD_WIDTH = 10;
+const BOARD_WIDTH = 13; // Increased from 10 to 13 to use full 320px width (13 × 24px = 312px)
 const BOARD_HEIGHT = 15; // Reduced from 20 to 15 to fit visible area
-const BLOCK_SIZE = 24; // Reduced from 32 to 24 so 15 rows fit in 360px canvas
+const BLOCK_SIZE = 24; // 15 rows × 24px = 360px height, 13 cols × 24px = 312px width
 
 // Game state
 let board = [];
@@ -211,8 +211,10 @@ function placePiece() {
 
 function clearLines() {
     let linesCleared = 0;
+    let linesToClear = [];
     
-    for (let y = BOARD_HEIGHT - 1; y >= 0; y--) {
+    // First pass: identify all complete lines
+    for (let y = 0; y < BOARD_HEIGHT; y++) {
         let fullLine = true;
         for (let x = 0; x < BOARD_WIDTH; x++) {
             if (!board[y][x]) {
@@ -220,16 +222,24 @@ function clearLines() {
                 break;
             }
         }
-        
         if (fullLine) {
-            // Add sparkle effect for cleared lines
-            animateLineClear(y);
-            
-            board.splice(y, 1);
-            board.unshift(new Array(BOARD_WIDTH).fill(0));
-            linesCleared++;
-            y++; // Check the same line again
+            linesToClear.push(y);
         }
+    }
+    
+    // Second pass: remove complete lines from bottom to top
+    for (let i = linesToClear.length - 1; i >= 0; i--) {
+        const lineY = linesToClear[i];
+        
+        // Visual feedback
+        animateLineClear(lineY);
+        
+        // Remove the complete line
+        board.splice(lineY, 1);
+        // Add new empty line at top
+        board.unshift(new Array(BOARD_WIDTH).fill(0));
+        
+        linesCleared++;
     }
     
     if (linesCleared > 0) {
@@ -239,9 +249,14 @@ function clearLines() {
         score += bonusScore;
         lines += linesCleared;
         
-        // Level up every 10 lines
-        level = Math.floor(lines / 10) + 1;
-        dropInterval = Math.max(100, 1000 - (level - 1) * 100);
+        // Level up every 10 lines with proper Tetris speed progression
+        const newLevel = Math.floor(lines / 10) + 1;
+        if (newLevel > level) {
+            level = newLevel;
+            // Standard Tetris speed progression: faster each level but not too extreme
+            dropInterval = Math.max(50, Math.pow(0.8, level - 1) * 1000);
+            showTemporaryMessage(`🆙 Level ${level}! Speed increased! 🚀`, 2000);
+        }
         
         updateDisplay();
         checkLoveMilestone();

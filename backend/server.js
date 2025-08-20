@@ -1083,40 +1083,40 @@ app.post('/api/ai/chat', [
     try {
       user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
       
-      // Get recent user data for context
+      // Get recent user data for context (extended time range)
       recentData = await db.get(`
-        SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality
+        SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
         FROM daily_data dd
-        WHERE dd.user_id = ? AND dd.date >= date('now', '-3 days')
+        WHERE dd.user_id = ? AND dd.date >= date('now', '-14 days')
         ORDER BY dd.date DESC
         LIMIT 1
       `, [userId]);
       
-      // Get recent bowel movements with notes
+      // Get recent bowel movements with notes (extended time range)
       recentBMs = await db.all(`
         SELECT bristol_scale, timing, notes, date
         FROM bowel_movements 
-        WHERE user_id = ? AND date >= date('now', '-3 days')
+        WHERE user_id = ? AND date >= date('now', '-14 days')
         ORDER BY date DESC
-        LIMIT 3
+        LIMIT 5
       `, [userId]);
       
-      // Get recent symptoms
+      // Get recent symptoms (extended time range)
       recentSymptoms = await db.get(`
         SELECT bloating, abdominal_pain, date
         FROM symptoms 
-        WHERE user_id = ? AND date >= date('now', '-3 days')
+        WHERE user_id = ? AND date >= date('now', '-14 days')
         ORDER BY date DESC
         LIMIT 1
       `, [userId]);
       
-      // Get recent notes
+      // Get recent notes (extended time range)
       recentNotes = await db.all(`
         SELECT note, date
         FROM daily_notes 
-        WHERE user_id = ? AND date >= date('now', '-3 days')
+        WHERE user_id = ? AND date >= date('now', '-14 days')
         ORDER BY date DESC
-        LIMIT 3
+        LIMIT 5
       `, [userId]);
       
     } catch (dbError) {
@@ -1168,16 +1168,16 @@ app.post('/api/ai/chat', [
         `${note.date}: ${note.note}`
       ).join('\n') : 'No recent notes/remarks';
 
-    const contextPrompt = `You are a supportive health assistant for ${user?.username || 'the user'}. You have access to their complete health tracking data.
+    const contextPrompt = `You are a supportive health assistant for ${user?.username || 'the user'}. You have access to their health tracking data.
 
-${user?.username || 'User'}'s Complete Health Context:
-- Recent water intake: ${recentData?.water_glasses || 0} glasses
-- Recent mood: ${recentData?.mood || 'Not recorded'}/5
-- Recent stress level: ${recentData?.stress_level || 'Not recorded'}/5  
-- Recent sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
-- Recent symptoms: Bloating ${recentSymptoms?.bloating || 0}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 0}/5
+${user?.username || 'User'}'s Health Context:
+- Most recent water intake: ${recentData?.water_glasses || 'No data'} glasses${recentData?.date ? ' on ' + recentData.date : ''}
+- Most recent mood: ${recentData?.mood || 'Not recorded'}/5
+- Most recent stress level: ${recentData?.stress_level || 'Not recorded'}/5  
+- Most recent sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
+- Recent symptoms: Bloating ${recentSymptoms?.bloating || 'Not recorded'}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 'Not recorded'}/5
 
-Recent Bowel Movements (detailed):
+Recent Bowel Movements:
 ${bmSummary}
 
 Recent Notes/Remarks:
@@ -1185,7 +1185,7 @@ ${notesSummary}${chatHistoryContext}
 
 User question: "${message}"
 
-Provide a helpful, supportive response (2-3 sentences) that shows you understand their specific situation. Reference their data when relevant (e.g., "I can see your recent sleep quality has been..." or "Looking at your bowel movement notes..."). Focus on digestive health, hydration, and general wellness. Always be encouraging and suggest consulting a doctor for serious concerns.`;
+IMPORTANT: If the user has data recorded, reference it specifically. If they have no recent data, encourage them to start tracking but still answer their general health question if possible. Don't assume they have no data - check what's actually provided above. Provide helpful, supportive responses (2-3 sentences). Always be encouraging.`;
 
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
