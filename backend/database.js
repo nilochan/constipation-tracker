@@ -1,8 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-// Ensure database is stored in a persistent location
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'data', 'database.db');
+// Database path - Railway will set DB_PATH to /data/database.db
+const dbPath = process.env.DB_PATH || './database.db';
 
 class Database {
   constructor() {
@@ -14,11 +14,18 @@ class Database {
       console.log('Created data directory:', dataDir);
     }
     
+    console.log('🗄️ Database configuration:');
+    console.log('- DB_PATH env var:', process.env.DB_PATH);
+    console.log('- Final dbPath:', dbPath);
+    console.log('- Data directory:', dataDir);
+    console.log('- Directory exists:', fs.existsSync(dataDir));
+    
     this.db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err);
+        console.error('Attempted path:', dbPath);
       } else {
-        console.log('Connected to SQLite database at:', dbPath);
+        console.log('✅ Connected to SQLite database at:', dbPath);
         this.initializeTables();
       }
     });

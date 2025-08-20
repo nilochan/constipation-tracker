@@ -1,7 +1,10 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
   "deploy": {
-    "startCommand": "cd backend && npm start",
+    "startCommand": "cd backend && DB_PATH=/data/database.db npm start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30000,
     "restartPolicyType": "ON_FAILURE",
@@ -10,7 +13,7 @@
   "volumes": [
     {
       "name": "database",
-      "mountPath": "/app/backend/data"
+      "mountPath": "/data"
     }
   ]
 }
