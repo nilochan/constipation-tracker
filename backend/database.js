@@ -1,8 +1,11 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-// Database path - Railway will set DB_PATH to /data/database.db
-const dbPath = process.env.DB_PATH || './database.db';
+// Try different persistence paths for Railway
+const dbPath = process.env.DB_PATH || 
+               process.env.RAILWAY_VOLUME_MOUNT_PATH ? 
+               path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'database.db') :
+               './database.db';
 
 class Database {
   constructor() {
