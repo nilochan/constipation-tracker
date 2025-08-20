@@ -91,7 +91,7 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
           <div className="text-center mb-4">
             <span className="text-4xl">🐰</span>
             <h1 className="text-2xl font-bold text-gray-800 mt-2">
-              Constipation Relief Tracker
+              Pinko's Constipation Relief Tracker
             </h1>
           </div>
           <p className="text-gray-600">

@@ -1220,7 +1220,7 @@ const ConstipationReliefTracker = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🐰</span>
-              <h1 className="text-xl font-bold text-gray-800">Constipation Relief Tracker</h1>
+              <h1 className="text-xl font-bold text-gray-800">Pinko's Constipation Relief Tracker</h1>
             </div>
             <div className="flex items-center gap-4">
               <button
