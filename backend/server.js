@@ -1088,10 +1088,16 @@ app.get('/api/ai/debug-data', authenticateToken, async (req, res) => {
       LIMIT 1
     `, [userId, today, today]);
 
+    // Get all user dates for comparison
+    const allDates = await db.all('SELECT DISTINCT date FROM daily_data WHERE user_id = ? ORDER BY date DESC LIMIT 10', [userId]);
+
     res.json({
       user,
       recentData,
       today,
+      allUserDates: allDates.map(d => d.date),
+      serverTime: new Date().toISOString(),
+      serverTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       message: 'Debug data for AI chat'
     });
   } catch (error) {
