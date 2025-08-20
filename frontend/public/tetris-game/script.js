@@ -158,15 +158,25 @@ function spawnNewPiece() {
 }
 
 function rotatePiece(piece) {
-    const rotated = [];
-    const N = piece.shape.length;
+    const shape = piece.shape;
+    const rows = shape.length;
+    const cols = shape[0].length;
     
-    for (let i = 0; i < N; i++) {
+    // Create rotated matrix: transpose and reverse each row
+    const rotated = [];
+    for (let i = 0; i < cols; i++) {
         rotated[i] = [];
-        for (let j = 0; j < N; j++) {
-            rotated[i][j] = piece.shape[N - 1 - j][i];
+        for (let j = 0; j < rows; j++) {
+            rotated[i][j] = shape[rows - 1 - j][i];
         }
     }
+    
+    console.log('Rotation:', {
+        original: `${rows}x${cols}`,
+        rotated: `${rotated.length}x${rotated[0].length}`,
+        originalShape: shape,
+        rotatedShape: rotated
+    });
     
     return rotated;
 }
@@ -216,18 +226,26 @@ function clearLines() {
     // First pass: identify all complete lines
     for (let y = 0; y < BOARD_HEIGHT; y++) {
         let fullLine = true;
+        let blocksInLine = 0;
         for (let x = 0; x < BOARD_WIDTH; x++) {
             if (!board[y][x]) {
                 fullLine = false;
                 break;
+            } else {
+                blocksInLine++;
             }
         }
         if (fullLine) {
+            console.log(`Complete line found at row ${y} with ${blocksInLine}/${BOARD_WIDTH} blocks`);
             linesToClear.push(y);
         }
     }
     
     // Second pass: remove complete lines from bottom to top
+    if (linesToClear.length > 0) {
+        console.log(`Clearing ${linesToClear.length} lines:`, linesToClear);
+    }
+    
     for (let i = linesToClear.length - 1; i >= 0; i--) {
         const lineY = linesToClear[i];
         
@@ -240,6 +258,7 @@ function clearLines() {
         board.unshift(new Array(BOARD_WIDTH).fill(0));
         
         linesCleared++;
+        console.log(`Cleared line ${lineY}, total cleared: ${linesCleared}`);
     }
     
     if (linesCleared > 0) {

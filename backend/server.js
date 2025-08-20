@@ -832,6 +832,15 @@ app.post('/api/ai/daily-summary', async (req, res) => {
       hour12: true 
     });
 
+    // DEBUG: Log what data we found for daily summary
+    console.log('=== DAILY SUMMARY DEBUG ===');
+    console.log('Date:', date);
+    console.log('Daily Data:', dailyData);
+    console.log('Bowel Movements:', bowelMovements);
+    console.log('Symptoms:', symptoms);
+    console.log('Notes:', notes);
+    console.log('============================');
+    
     // Create detailed bowel movement summary
     const bmDetails = bowelMovements.map(bm => 
       `Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
@@ -1128,6 +1137,15 @@ app.post('/api/ai/chat', [
       recentSymptoms = {};
       recentNotes = [];
     }
+    
+    // DEBUG: Log what data we actually found
+    console.log('=== AI CHAT DEBUG ===');
+    console.log('User:', user);
+    console.log('Recent Data:', recentData);
+    console.log('Recent BMs:', recentBMs);
+    console.log('Recent Symptoms:', recentSymptoms);
+    console.log('Recent Notes:', recentNotes);
+    console.log('====================')
 
     let chatHistoryContext = '';
 
