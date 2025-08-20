@@ -816,11 +816,14 @@ app.post('/api/ai/daily-summary', async (req, res) => {
     const userId = req.user.userId;
     const { date } = req.body;
     
-    // Get today's data
+    // Get user info for personalized greeting
+    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    
+    // Get today's data with more detailed information
     const dailyData = await db.get('SELECT * FROM daily_data WHERE user_id = ? AND date = ?', [userId, date]);
-    const bowelMovements = await db.all('SELECT * FROM bowel_movements WHERE user_id = ? AND date = ?', [userId, date]);
+    const bowelMovements = await db.all('SELECT bristol_scale, timing, notes FROM bowel_movements WHERE user_id = ? AND date = ?', [userId, date]);
     const symptoms = await db.get('SELECT * FROM symptoms WHERE user_id = ? AND date = ?', [userId, date]);
-    const notes = await db.all('SELECT * FROM daily_notes WHERE user_id = ? AND date = ?', [userId, date]);
+    const notes = await db.all('SELECT note FROM daily_notes WHERE user_id = ? AND date = ?', [userId, date]);
 
     const currentTime = new Date().toLocaleString('en-US', { 
       timeZone: 'Asia/Singapore',
@@ -829,18 +832,23 @@ app.post('/api/ai/daily-summary', async (req, res) => {
       hour12: true 
     });
 
-    const prompt = `You are a helpful health assistant analyzing daily health data. Current time: ${currentTime}
+    // Create detailed bowel movement summary
+    const bmDetails = bowelMovements.map(bm => 
+      `Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
+    ).join(', ') || 'None recorded';
+
+    const prompt = `You are a caring health assistant providing daily health insights. NEVER start with "Of course!" - always start with a personalized greeting.
 
 Data for ${date}:
 - Water intake: ${dailyData?.water_glasses || 0} glasses
-- Mood: ${dailyData?.mood || 'Not recorded'}/5
+- Mood: ${dailyData?.mood || 'Not recorded'}/5  
 - Stress level: ${dailyData?.stress_level || 'Not recorded'}/5
 - Sleep quality: ${dailyData?.sleep_quality || 'Not recorded'}/5
-- Bowel movements: ${bowelMovements?.length || 0} recorded
+- Bowel movements: ${bmDetails}
 - Symptoms: Bloating ${symptoms?.bloating || 0}/5, Abdominal pain ${symptoms?.abdominal_pain || 0}/5
-- Daily notes: ${notes?.map(n => n.note).join('; ') || 'None'}
+- Daily notes/remarks: ${notes?.map(n => n.note).join('; ') || 'None'}
 
-Provide a brief, encouraging daily health summary (2-3 sentences) focusing on positives and gentle suggestions for improvement. Be warm and supportive.`;
+Start your response with "Dear ${user?.username || 'there'}," and provide a brief, encouraging daily health summary (2-3 sentences) focusing on positives and gentle suggestions for improvement. Be warm and supportive.`;
 
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
@@ -867,6 +875,9 @@ app.post('/api/ai/weekly-summary', async (req, res) => {
   try {
     const userId = req.user.userId;
     
+    // Get user info for personalized greeting
+    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    
     // Get past 7 days data
     const weekData = await db.all(`
       SELECT dd.date, dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality,
@@ -882,7 +893,7 @@ app.post('/api/ai/weekly-summary', async (req, res) => {
     const avgMood = weekData.filter(d => d.mood).reduce((sum, day) => sum + day.mood, 0) / weekData.filter(d => d.mood).length || 0;
     const totalBM = weekData.reduce((sum, day) => sum + (day.bowel_movements || 0), 0);
 
-    const prompt = `You are a helpful health assistant providing weekly health insights.
+    const prompt = `You are a caring health assistant providing weekly health insights. NEVER start with "Of course!" - always start with a personalized greeting.
 
 Past 7 days summary:
 - Average water intake: ${avgWater.toFixed(1)} glasses/day
@@ -890,7 +901,7 @@ Past 7 days summary:
 - Total bowel movements: ${totalBM}
 - Days tracked: ${weekData.length}
 
-Provide a supportive weekly health summary (3-4 sentences) with gentle insights and encouragement for the coming week.`;
+Start your response with "Dear ${user?.username || 'there'}," and provide a supportive weekly health summary (3-4 sentences) with gentle insights and encouragement for the coming week.`;
 
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
@@ -1066,13 +1077,43 @@ app.post('/api/ai/chat', [
     const userId = req.user.userId;
     const { message } = req.body;
 
-    // Get recent user data for context
+    // Get user info for personalized responses
+    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    
+    // Get comprehensive recent user data for context
     const recentData = await db.get(`
-      SELECT dd.water_glasses, dd.mood, dd.stress_level, COUNT(bm.id) as recent_bowel_movements
+      SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality
       FROM daily_data dd
-      LEFT JOIN bowel_movements bm ON dd.user_id = bm.user_id AND dd.date = bm.date
-      WHERE dd.user_id = ? AND dd.date >= date('now', '-3 days')
-      GROUP BY dd.user_id
+      WHERE dd.user_id = ? AND dd.date >= date('now', '-7 days')
+      ORDER BY dd.date DESC
+      LIMIT 1
+    `, [userId]);
+    
+    // Get detailed bowel movement data with notes
+    const recentBMs = await db.all(`
+      SELECT bristol_scale, timing, notes, date
+      FROM bowel_movements 
+      WHERE user_id = ? AND date >= date('now', '-7 days')
+      ORDER BY date DESC, timing DESC
+      LIMIT 5
+    `, [userId]);
+    
+    // Get recent symptoms
+    const recentSymptoms = await db.get(`
+      SELECT bloating, abdominal_pain, date
+      FROM symptoms 
+      WHERE user_id = ? AND date >= date('now', '-7 days')
+      ORDER BY date DESC
+      LIMIT 1
+    `, [userId]);
+    
+    // Get recent notes/remarks
+    const recentNotes = await db.all(`
+      SELECT note, date
+      FROM daily_notes 
+      WHERE user_id = ? AND date >= date('now', '-7 days')
+      ORDER BY date DESC
+      LIMIT 3
     `, [userId]);
 
     let chatHistoryContext = '';
@@ -1103,16 +1144,33 @@ app.post('/api/ai/chat', [
       }
     }
 
-    const contextPrompt = `You are a supportive health assistant for a constipation tracking app. 
+    // Format detailed context information
+    const bmSummary = recentBMs.map(bm => 
+      `${bm.date}: Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
+    ).join('\n') || 'No recent bowel movements recorded';
+    
+    const notesSummary = recentNotes.map(note => 
+      `${note.date}: ${note.note}`
+    ).join('\n') || 'No recent notes/remarks';
 
-User's recent health context:
+    const contextPrompt = `You are a supportive health assistant for ${user?.username || 'the user'}. You have access to their complete health tracking data.
+
+${user?.username || 'User'}'s Complete Health Context:
 - Recent water intake: ${recentData?.water_glasses || 0} glasses
 - Recent mood: ${recentData?.mood || 'Not recorded'}/5
-- Recent bowel movements: ${recentData?.recent_bowel_movements || 0}${chatHistoryContext}
+- Recent stress level: ${recentData?.stress_level || 'Not recorded'}/5  
+- Recent sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
+- Recent symptoms: Bloating ${recentSymptoms?.bloating || 0}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 0}/5
+
+Recent Bowel Movements (detailed):
+${bmSummary}
+
+Recent Notes/Remarks:
+${notesSummary}${chatHistoryContext}
 
 User question: "${message}"
 
-Provide a helpful, supportive response (2-3 sentences). Focus on digestive health, hydration, and general wellness. Always be encouraging and suggest consulting a doctor for serious concerns.`;
+Provide a helpful, supportive response (2-3 sentences) that shows you understand their specific situation. Reference their data when relevant (e.g., "I can see your recent sleep quality has been..." or "Looking at your bowel movement notes..."). Focus on digestive health, hydration, and general wellness. Always be encouraging and suggest consulting a doctor for serious concerns.`;
 
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',

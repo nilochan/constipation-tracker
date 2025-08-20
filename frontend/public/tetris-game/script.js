@@ -6,7 +6,7 @@ const nextCtx = nextCanvas.getContext('2d');
 
 // Game constants
 const BOARD_WIDTH = 10;
-const BOARD_HEIGHT = 20;
+const BOARD_HEIGHT = 15; // Reduced from 20 to 15 to trim bottom 40%
 const BLOCK_SIZE = 32;
 
 // Game state
@@ -365,8 +365,8 @@ function rotate() {
 }
 
 function draw() {
-    // Clear canvas with solid dark background
-    ctx.fillStyle = '#1a1a2e';
+    // Clear canvas with white background
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw board pieces with Cony & Brown theme
@@ -394,10 +394,7 @@ function draw() {
         }
     }
     
-    // Draw ghost piece (preview where piece will land)
-    if (currentPiece) {
-        drawGhostPiece();
-    }
+    // Ghost piece removed as requested - no more shadow hint
 }
 
 function drawBlock(x, y, color, emoji = '') {
@@ -412,8 +409,8 @@ function drawBlock(x, y, color, emoji = '') {
     ctx.fillStyle = gradient;
     ctx.fillRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
     
-    // Draw border
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    // Draw border - darker for white background
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = 1;
     ctx.strokeRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
     
@@ -422,7 +419,7 @@ function drawBlock(x, y, color, emoji = '') {
         ctx.font = '16px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'white';
+        ctx.fillStyle = 'black'; // Change to black for visibility on white background
         ctx.fillText(emoji, pixelX + BLOCK_SIZE/2, pixelY + BLOCK_SIZE/2);
     }
 }
