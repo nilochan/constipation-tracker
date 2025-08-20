@@ -1073,6 +1073,33 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
   }
 });
 
+// Debug endpoint to check AI data retrieval
+app.get('/api/ai/debug-data', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const today = new Date().toISOString().split('T')[0];
+    
+    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    const recentData = await db.get(`
+      SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
+      FROM daily_data dd
+      WHERE dd.user_id = ? AND (dd.date = ? OR dd.date >= date('now', '-14 days'))
+      ORDER BY CASE WHEN dd.date = ? THEN 0 ELSE 1 END, dd.date DESC
+      LIMIT 1
+    `, [userId, today, today]);
+
+    res.json({
+      user,
+      recentData,
+      today,
+      message: 'Debug data for AI chat'
+    });
+  } catch (error) {
+    console.error('Debug data error:', error);
+    res.status(500).json({ error: 'Failed to get debug data' });
+  }
+});
+
 // Chat with AI assistant (enhanced with chat history context)
 app.post('/api/ai/chat', [
   body('message').isLength({ min: 1, max: 500 }).trim()
@@ -1193,7 +1220,7 @@ app.post('/api/ai/chat', [
 ${user?.username || 'User'}'s Health Context:
 - Most recent water intake: ${recentData?.water_glasses || 'No data'} glasses${recentData?.date ? ' on ' + recentData.date : ''}
 - Most recent mood: ${recentData?.mood || 'Not recorded'}/5
-- Most recent stress level: ${recentData?.stress_level || 'Not recorded'}/5  
+- Most recent stress level: ${recentData?.stress_level || 'Not recorded'}/10  
 - Most recent sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
 - Recent symptoms: Bloating ${recentSymptoms?.bloating || 'Not recorded'}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 'Not recorded'}/5
 
