@@ -751,6 +751,61 @@ const ConstipationReliefTracker = () => {
     }
   };
 
+  const handleSimpleAdminPromotion = async () => {
+    if (!user) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      // Use the admin secret to promote current user
+      const response = await fetch('/api/admin/promote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          username: user.username,
+          adminSecret: adminSecret.trim()
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert('🎉 Admin access granted! You now have admin privileges.');
+        
+        // Refresh user token with updated admin status
+        try {
+          const refreshData = await ApiService.refreshUserData();
+          
+          // Update token and user data
+          ApiService.setToken(refreshData.token);
+          setUser(refreshData.user);
+          setProfileData(refreshData.user);
+          
+          // Clear the secret input
+          setAdminSecret('');
+          
+        } catch (refreshError) {
+          console.error('Failed to refresh token:', refreshError);
+          alert('You are now admin, but please refresh the page to access admin features.');
+          
+          // Fallback: update local state
+          const updatedUser = { ...user, is_admin: true };
+          setUser(updatedUser);
+          setProfileData(updatedUser);
+        }
+      } else {
+        throw new Error(data.error || 'Invalid admin secret');
+      }
+    } catch (error) {
+      console.error('Admin promotion failed:', error);
+      alert(`Admin access failed: ${error.message}`);
+      setAdminSecret(''); // Clear on error
+    }
+  };
+
   const showAllUsers = async () => {
     try {
       const response = await fetch('/api/debug/users');
@@ -2294,38 +2349,22 @@ const ConstipationReliefTracker = () => {
                 {/* Show admin promotion for non-admin users OR when not logged in */}
                 {((user && !user.is_admin) || !user) && (
                   <div className="bg-green-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-800 mb-2">👑 Become Admin</h4>
-                    <p className="text-sm text-gray-600 mb-3">{user ? 'Enter admin secret key to gain admin privileges' : 'Admin promotion tools (works even when not logged in)'}</p>
-                    <div className="space-y-2">
+                    <h4 className="font-medium text-gray-800 mb-2">👑 Admin Access</h4>
+                    <p className="text-sm text-gray-600 mb-3">Enter secret key to access admin features</p>
+                    <div className="space-y-3">
+                      <input
+                        type="password"
+                        value={adminSecret}
+                        onChange={(e) => setAdminSecret(e.target.value)}
+                        placeholder="Admin secret key"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
                       <button
-                        onClick={() => setShowAdminPromote(true)}
-                        className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        onClick={handleSimpleAdminPromotion}
+                        disabled={!adminSecret.trim()}
+                        className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                       >
-                        🔑 Promote to Admin
-                      </button>
-                      <button
-                        onClick={checkAdminSecret}
-                        className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        🔍 Check Admin Secret
-                      </button>
-                      <button
-                        onClick={emergencyAdminPromotion}
-                        className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        🚨 Emergency Admin Promotion
-                      </button>
-                      <button
-                        onClick={simpleAdminPromotion}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        ⚡ Simple Admin Promotion
-                      </button>
-                      <button
-                        onClick={showAllUsers}
-                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        👥 Show All Users
+                        🔓 Access Admin Panel
                       </button>
                     </div>
                   </div>
