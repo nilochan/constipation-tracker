@@ -2180,13 +2180,24 @@ const ConstipationReliefTracker = () => {
                 <p className="text-gray-600">Take a break and play some games while tracking your health!</p>
               </div>
               
-              {/* Snake Game Container */}
-              <div className="w-full bg-gray-50 rounded-lg p-4" style={{ minHeight: '600px' }}>
+              {/* Snake Game Container - Mobile Optimized */}
+              <div className="w-full bg-gray-50 rounded-lg p-2 sm:p-4" 
+                   style={{ 
+                     height: 'calc(100vh - 200px)', 
+                     minHeight: '600px', 
+                     maxHeight: '800px' 
+                   }}>
                 <iframe
                   src="/snake-game/index.html"
                   title="Pinko's Snake Game"
                   className="w-full h-full border-0 rounded-lg"
-                  style={{ minHeight: '600px', background: '#f0f0f0' }}
+                  style={{ 
+                    height: '100%', 
+                    width: '100%', 
+                    background: '#f0f0f0',
+                    overflow: 'hidden'
+                  }}
+                  scrolling="no"
                   onError={() => {
                     console.log('Snake game failed to load');
                   }}
