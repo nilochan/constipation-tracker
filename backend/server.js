@@ -147,7 +147,7 @@ app.post('/api/register', [
     res.status(201).json({
       message: 'User created successfully',
       token,
-      user: { id: result.id, username, email, is_admin: false }
+      user: { id: result.id, username, email, profile_photo: null, is_admin: false }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -192,7 +192,7 @@ app.post('/api/login', [
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin }
+      user: { id: user.id, username: user.username, email: user.email, profile_photo: user.profile_photo, is_admin: user.is_admin }
     });
   } catch (error) {
     console.error('Login error:', error);
