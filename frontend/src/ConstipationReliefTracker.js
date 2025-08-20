@@ -1347,6 +1347,16 @@ const ConstipationReliefTracker = () => {
           >
             Analytics & Trends
           </button>
+          <button
+            onClick={() => setActiveTab('games')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'games'
+                ? 'bg-blue-500 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            🎮 Games
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -2157,6 +2167,34 @@ const ConstipationReliefTracker = () => {
                     <div className="text-xs text-gray-400 mt-1">Start adding daily notes to see them here</div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'games' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">🎮 Pinko's Snake Game</h2>
+                <p className="text-gray-600">Take a break and play some games while tracking your health!</p>
+              </div>
+              
+              {/* Snake Game Container */}
+              <div className="w-full bg-gray-50 rounded-lg p-4" style={{ minHeight: '600px' }}>
+                <iframe
+                  src="/snake-game/index.html"
+                  title="Pinko's Snake Game"
+                  className="w-full h-full border-0 rounded-lg"
+                  style={{ minHeight: '600px', background: '#f0f0f0' }}
+                  onError={() => {
+                    console.log('Snake game failed to load');
+                  }}
+                />
+              </div>
+              
+              <div className="text-center mt-4 text-sm text-gray-500">
+                🐍 Use arrow keys or on-screen buttons to play • Score points to unlock special photos!
               </div>
             </div>
           </div>
