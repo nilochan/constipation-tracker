@@ -1279,49 +1279,98 @@ app.get('/api/admin/user-stats', authenticateToken, requireAdmin, async (req, re
   }
 });
 
-// One-time reset: Remove all admin privileges
-app.post('/api/debug/reset-admins', async (req, res) => {
+// Debug endpoint to check admin secret (remove in production)
+app.get('/api/debug/admin-secret', (req, res) => {
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
+  res.json({ 
+    adminSecret: ADMIN_SECRET,
+    message: 'This endpoint should be removed in production',
+    envCheck: {
+      hasEnvSecret: !!process.env.ADMIN_SECRET,
+      usingDefault: !process.env.ADMIN_SECRET
+    }
+  });
+});
+
+// Emergency admin promotion (remove in production)
+app.post('/api/debug/emergency-admin', async (req, res) => {
   try {
-    const { resetSecret } = req.body;
+    console.log('Emergency admin promotion request:', req.body);
     
-    // Use same admin secret for reset
-    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-promote-secret-2024';
+    const { username } = req.body;
     
-    if (resetSecret !== ADMIN_SECRET) {
-      return res.status(403).json({ error: 'Invalid reset secret' });
+    if (!username) {
+      console.log('No username provided');
+      return res.status(400).json({ error: 'Username required' });
+    }
+
+    console.log('Looking for user:', username);
+    
+    // Find user
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    console.log('Found user:', user);
+    
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.is_admin) {
+      console.log('User is already admin');
+      return res.json({ message: `${username} is already an admin` });
+    }
+
+    console.log('Promoting user to admin...');
+    
+    // Promote to admin
+    await db.run('UPDATE users SET is_admin = TRUE WHERE id = ?', [user.id]);
+    
+    console.log('Admin promotion successful');
+    
+    // Log admin promotion
+    await logActivity(user.id, username, 'EMERGENCY_ADMIN_PROMOTION', 'Emergency admin promotion via debug endpoint', req);
+
+    res.json({ message: `${username} has been promoted to admin via emergency method` });
+  } catch (error) {
+    console.error('Emergency admin promotion error:', error);
+    res.status(500).json({ error: `Internal server error: ${error.message}` });
+  }
+});
+
+// Simple admin promotion without auth (emergency fallback)
+app.post('/api/debug/make-admin', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    // Get all users if no username provided
+    if (!username) {
+      const users = await db.all('SELECT id, username, is_admin FROM users');
+      return res.json({ users, message: 'Provide username to promote' });
     }
     
-    // Reset all users to non-admin
-    const result = await db.run('UPDATE users SET is_admin = FALSE');
+    // Promote user
+    const result = await db.run('UPDATE users SET is_admin = TRUE WHERE username = ?', [username]);
     
-    res.json({ 
-      message: `Reset complete. ${result.changes} users set to non-admin.`,
-      changes: result.changes 
-    });
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: `${username} promoted to admin`, changes: result.changes });
   } catch (error) {
-    console.error('Reset admins error:', error);
+    console.error('Make admin error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Debug endpoint (DISABLED in production)
-app.get('/api/debug/admin-secret', (req, res) => {
-  res.status(403).json({ error: 'Debug endpoints disabled in production' });
-});
-
-// Emergency admin promotion (DISABLED in production)
-app.post('/api/debug/emergency-admin', async (req, res) => {
-  res.status(403).json({ error: 'Debug endpoints disabled in production' });
-});
-
-// Simple admin promotion without auth (DISABLED in production)
-app.post('/api/debug/make-admin', async (req, res) => {
-  res.status(403).json({ error: 'Debug endpoints disabled in production' });
-});
-
-// Get all users (DISABLED in production)
+// Get all users (for debugging)
 app.get('/api/debug/users', async (req, res) => {
-  res.status(403).json({ error: 'Debug endpoints disabled in production' });
+  try {
+    const users = await db.all('SELECT id, username, is_admin, created_at FROM users ORDER BY created_at');
+    res.json({ users });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Refresh user data (get updated user info)
