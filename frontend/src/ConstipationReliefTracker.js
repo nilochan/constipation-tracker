@@ -1323,10 +1323,10 @@ const ConstipationReliefTracker = () => {
                   <img 
                     src={user.profile_photo} 
                     alt="Profile" 
-                    className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                    className="w-10 h-10 sm:w-8 sm:h-8 rounded-full object-cover border border-gray-300"
                   />
                 ) : (
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-10 h-10 sm:w-8 sm:h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
                     {(user?.username || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -1389,7 +1389,7 @@ const ConstipationReliefTracker = () => {
                 : 'bg-white text-gray-700 hover:bg-gray-100'
             }`}
           >
-            🎮 Games
+            🔮 Future Games
           </button>
         </div>
 
@@ -1592,21 +1592,21 @@ const ConstipationReliefTracker = () => {
                     {currentData.bowelMovements.map((movement) => {
                       const bristolInfo = bristolScale.find(s => s.type === movement.bristolType);
                       return (
-                        <div key={movement.id} className={`relative p-5 rounded-xl border-2 ${bristolInfo?.color || 'bg-gray-50 border-gray-200'} shadow-sm hover:shadow-md transition-all`}>
-                          <div className="flex items-start gap-4">
-                            <div className="text-4xl">{bristolInfo?.icon || '📊'}</div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
+                        <div key={movement.id} className={`relative p-4 rounded-xl border-2 ${bristolInfo?.color || 'bg-gray-50 border-gray-200'} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                            <div className="text-3xl sm:text-4xl text-center sm:text-left">{bristolInfo?.icon || '📊'}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
                                 <span className="text-lg font-bold text-gray-800">Type {movement.bristolType}</span>
                                 <span className="text-xl">{bristolInfo?.emoji || '⚫'}</span>
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${bristolInfo?.severityColor || 'text-gray-600'} bg-white bg-opacity-80`}>
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${bristolInfo?.severityColor || 'text-gray-600'} bg-white bg-opacity-80 whitespace-nowrap`}>
                                   {bristolInfo?.severity || 'Unknown'}
                                 </span>
                               </div>
-                              <div className="text-sm font-medium text-gray-700 mb-1">{bristolInfo?.name}</div>
-                              <div className="text-xs text-gray-600 mb-3">{bristolInfo?.description}</div>
+                              <div className="text-sm font-medium text-gray-700 mb-1 truncate">{bristolInfo?.name}</div>
+                              <div className="text-xs text-gray-600 mb-3 line-clamp-2">{bristolInfo?.description}</div>
                               
-                              <div className="flex items-center gap-4 text-sm">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
                                 <div className="flex items-center gap-1">
                                   <Clock size={14} className="text-purple-500" />
                                   <span className="font-medium">{movement.time}</span>
@@ -1986,7 +1986,7 @@ const ConstipationReliefTracker = () => {
                     <div key={scale.type} className={`relative bg-white rounded-xl p-5 shadow-sm border-2 transition-all hover:shadow-md ${
                       isUsed ? scale.color : 'border-gray-200 opacity-60'
                     }`}>
-                      <div className="flex items-center gap-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
                         {/* Type Icon and Number */}
                         <div className="flex items-center gap-3">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${
@@ -2012,7 +2012,7 @@ const ConstipationReliefTracker = () => {
                         </div>
 
                         {/* Statistics */}
-                        <div className="text-right min-w-[120px]">
+                        <div className="text-center sm:text-right min-w-[120px]">
                           <div className="text-3xl font-bold text-gray-800 mb-1">{count}</div>
                           <div className="text-sm text-gray-600 mb-2">times ({percentage.toFixed(1)}%)</div>
                           
@@ -2210,30 +2210,66 @@ const ConstipationReliefTracker = () => {
           <div className="space-y-6">
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">🎮 Pinko's Snake Game</h2>
-                <p className="text-gray-600">Take a break and play some games while tracking your health!</p>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">🔮 Future Games</h2>
+                <p className="text-gray-600">Exciting games are coming soon to make your health tracking journey more fun!</p>
               </div>
               
-              {/* Game Preview with Play Button */}
-              <div className="text-center">
-                <div className="bg-gradient-to-br from-green-400 to-blue-500 rounded-lg p-8 mb-4">
-                  <div className="text-white mb-4">
-                    <div className="text-6xl mb-2">🐍</div>
-                    <h3 className="text-xl font-bold">Pinko's Snake Game</h3>
-                    <p className="text-sm opacity-90">Score points to unlock beautiful love photos!</p>
+              {/* Coming Soon Games */}
+              <div className="grid md:grid-cols-2 gap-6">
+                
+                {/* Tetris Game - Coming Soon */}
+                <div className="bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg p-6 text-white text-center">
+                  <div className="text-4xl mb-3">🧩</div>
+                  <h3 className="text-xl font-bold mb-2">Tetris Challenge</h3>
+                  <p className="text-sm opacity-90 mb-4">Stack blocks while tracking your wellness goals!</p>
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 text-sm">
+                    🚧 Coming Soon 🚧
                   </div>
                 </div>
-                
-                <button
-                  onClick={() => setShowGameFullscreen(true)}
-                  className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg"
-                >
-                  🎮 Play Full Screen Game
-                </button>
-                
-                <div className="text-center mt-4 text-sm text-gray-500">
-                  🐍 Mobile optimized • Use arrow keys or touch controls • Love photos unlock with score!
+
+                {/* Memory Game - Coming Soon */}
+                <div className="bg-gradient-to-br from-blue-400 to-teal-500 rounded-lg p-6 text-white text-center">
+                  <div className="text-4xl mb-3">🧠</div>
+                  <h3 className="text-xl font-bold mb-2">Memory Trainer</h3>
+                  <p className="text-sm opacity-90 mb-4">Boost your brain while managing your health!</p>
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 text-sm">
+                    🚧 Coming Soon 🚧
+                  </div>
                 </div>
+
+                {/* Puzzle Game - Coming Soon */}
+                <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-lg p-6 text-white text-center">
+                  <div className="text-4xl mb-3">🧩</div>
+                  <h3 className="text-xl font-bold mb-2">Wellness Puzzle</h3>
+                  <p className="text-sm opacity-90 mb-4">Solve puzzles to unlock health tips!</p>
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 text-sm">
+                    🚧 Coming Soon 🚧
+                  </div>
+                </div>
+
+                {/* Hidden Snake Game - Only show for testing */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="bg-gradient-to-br from-green-400 to-blue-500 rounded-lg p-6 text-white text-center">
+                    <div className="text-4xl mb-3">🐍</div>
+                    <h3 className="text-xl font-bold mb-2">Snake Game (Hidden)</h3>
+                    <p className="text-sm opacity-90 mb-4">Classic snake with love photos!</p>
+                    <button
+                      onClick={() => setShowGameFullscreen(true)}
+                      className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg px-4 py-2 text-sm transition-colors"
+                    >
+                      🎮 Play (Dev Only)
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-center mt-6 p-4 bg-gray-50 rounded-lg">
+                <div className="text-2xl mb-2">🎯</div>
+                <h3 className="font-bold text-gray-800 mb-2">Game Development Roadmap</h3>
+                <p className="text-sm text-gray-600">
+                  We're working on bringing you fun, health-themed games to make wellness tracking enjoyable. 
+                  Stay tuned for updates!
+                </p>
               </div>
             </div>
           </div>

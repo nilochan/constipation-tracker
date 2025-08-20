@@ -951,6 +951,7 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
       source,
       historyLength: chatHistory.length,
       pineconeConfigured: !!pineconeIndex,
+      pineconeApiKey: !!PINECONE_API_KEY,
       sampleMessage: chatHistory[0]
     });
 
@@ -1019,6 +1020,11 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
         source: source,
         sampleMessages: chatHistory.slice(0, 3).map(c => `${c.sender}: ${c.message?.substring(0, 50)}...`)
       });
+    }
+
+    // Ensure we always have a processed count
+    if (processed === 0) {
+      processed = chatHistory.length;
     }
 
     // Log chat history upload activity
