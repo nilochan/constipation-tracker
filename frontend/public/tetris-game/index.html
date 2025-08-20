@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinko's Tetris - Love Blocks</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .game-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 10px;
+        }
+
+        .game-board {
+            display: flex;
+            gap: 20px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .tetris-board {
+            background: rgba(0, 0, 0, 0.3);
+            border: 3px solid #fff;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 8px;
+        }
+
+        .side-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            min-width: 250px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .game-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .game-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff6b9d;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+
+        .score-display {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .score-item {
+            margin: 8px 0;
+        }
+
+        .score-label {
+            font-size: 12px;
+            opacity: 0.8;
+            display: block;
+        }
+
+        .score-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ff6b9d;
+        }
+
+        .next-piece {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .next-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        #nextCanvas {
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .controls-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .control-btn {
+            background: rgba(255, 107, 157, 0.3);
+            border: 2px solid #ff6b9d;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            min-width: 45px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 107, 157, 0.5);
+            transform: scale(1.05);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .game-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .game-btn {
+            background: linear-gradient(45deg, #ff6b9d, #c44569);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            margin: 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .game-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 157, 0.4);
+        }
+
+        .love-display {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .love-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #ff6b9d;
+        }
+
+        .love-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            margin-top: 10px;
+            object-fit: cover;
+        }
+
+        .love-message {
+            font-size: 12px;
+            margin-top: 10px;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        /* Game Over Modal */
+        .game-over-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 1000;
+            border: 3px solid #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 300px;
+        }
+
+        .game-over-title {
+            font-size: 24px;
+            color: #ff6b9d;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .game-over-score {
+            font-size: 18px;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+
+        .modal-btn {
+            background: linear-gradient(45deg, #ff6b9d, #c44569);
+            border: none;
+            color: white;
+            padding: 12px 25px;
+            margin: 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 157, 0.4);
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .game-board {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .side-panel {
+                min-width: auto;
+                width: 100%;
+                max-width: 320px;
+                max-height: 300px;
+            }
+
+            .game-title {
+                font-size: 20px;
+            }
+
+            .control-btn {
+                min-width: 50px;
+                padding: 12px;
+                font-size: 18px;
+            }
+
+            #gameCanvas {
+                width: 320px;
+                height: 480px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #ff6b9d;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Loading Screen -->
+        <div id="loading" class="loading show">
+            <div class="spinner"></div>
+            <h2>💝 Loading Pinko's Tetris 💝</h2>
+            <p>Preparing your love-filled block puzzle game...</p>
+        </div>
+
+        <!-- Game Board -->
+        <div id="gameBoard" class="game-board hidden">
+            <!-- Main Game Area -->
+            <div class="tetris-board">
+                <canvas id="gameCanvas" width="320" height="480"></canvas>
+            </div>
+
+            <!-- Side Panel -->
+            <div class="side-panel">
+                <!-- Game Info -->
+                <div class="game-info">
+                    <div class="game-title">💝 Pinko's Tetris 💝</div>
+                    <p style="font-size: 12px; opacity: 0.8; margin: 0;">Stack blocks, unlock love! 💕</p>
+                </div>
+
+                <!-- Score Display -->
+                <div class="score-display">
+                    <div class="score-item">
+                        <span class="score-label">Score</span>
+                        <div class="score-value" id="scoreValue">0</div>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-label">Lines</span>
+                        <div class="score-value" id="linesValue">0</div>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-label">Level</span>
+                        <div class="score-value" id="levelValue">1</div>
+                    </div>
+                </div>
+
+                <!-- Next Piece -->
+                <div class="next-piece">
+                    <div class="next-title">💎 Next Piece</div>
+                    <canvas id="nextCanvas" width="80" height="80"></canvas>
+                </div>
+
+                <!-- Mobile Controls -->
+                <div class="controls">
+                    <div class="controls-title">📱 Touch Controls</div>
+                    <div class="control-row">
+                        <button class="control-btn" id="rotateBtn">🔄</button>
+                    </div>
+                    <div class="control-row">
+                        <button class="control-btn" id="leftBtn">←</button>
+                        <button class="control-btn" id="downBtn">↓</button>
+                        <button class="control-btn" id="rightBtn">→</button>
+                    </div>
+                </div>
+
+                <!-- Game Controls -->
+                <div class="game-controls">
+                    <button class="game-btn" id="startBtn">🎮 Start Game</button>
+                    <button class="game-btn" id="pauseBtn">⏸️ Pause</button>
+                    <button class="game-btn" id="restartBtn">🔄 Restart</button>
+                </div>
+
+                <!-- Love Display -->
+                <div id="loveDisplay" class="love-display hidden">
+                    <div class="love-title">💕 Love Unlocked!</div>
+                    <img id="loveImage" class="love-image" src="" alt="Love">
+                    <div id="loveMessage" class="love-message"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

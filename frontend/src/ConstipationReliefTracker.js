@@ -31,6 +31,7 @@ const ConstipationReliefTracker = () => {
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [showGameFullscreen, setShowGameFullscreen] = useState(false);
+  const [showTetrisFullscreen, setShowTetrisFullscreen] = useState(false);
   const [currentMessage, setCurrentMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -2217,14 +2218,17 @@ const ConstipationReliefTracker = () => {
               {/* Coming Soon Games */}
               <div className="grid md:grid-cols-2 gap-6">
                 
-                {/* Tetris Game - Coming Soon */}
+                {/* Tetris Game - NOW AVAILABLE! */}
                 <div className="bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg p-6 text-white text-center">
-                  <div className="text-4xl mb-3">🧩</div>
-                  <h3 className="text-xl font-bold mb-2">Tetris Challenge</h3>
-                  <p className="text-sm opacity-90 mb-4">Stack blocks while tracking your wellness goals!</p>
-                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 text-sm">
-                    🚧 Coming Soon 🚧
-                  </div>
+                  <div className="text-4xl mb-3">🐰🐻</div>
+                  <h3 className="text-xl font-bold mb-2">Pinko's Tetris</h3>
+                  <p className="text-sm opacity-90 mb-4">Cony & Brown love blocks! Stack with love! 💕</p>
+                  <button
+                    onClick={() => setShowTetrisFullscreen(true)}
+                    className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg px-4 py-2 text-sm transition-colors font-bold"
+                  >
+                    🎮 Play Now!
+                  </button>
                 </div>
 
                 {/* Memory Game - Coming Soon */}
@@ -2275,7 +2279,7 @@ const ConstipationReliefTracker = () => {
           </div>
         )}
 
-      {/* Full Screen Game Modal */}
+      {/* Full Screen Snake Game Modal */}
       {showGameFullscreen && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           {/* Exit Button */}
@@ -2299,6 +2303,35 @@ const ConstipationReliefTracker = () => {
             }}
             onError={() => {
               console.log('Snake game failed to load');
+            }}
+          />
+        </div>
+      )}
+
+      {/* Full Screen Tetris Game Modal */}
+      {showTetrisFullscreen && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* Exit Button */}
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              onClick={() => setShowTetrisFullscreen(false)}
+              className="bg-red-500 hover:bg-red-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors"
+              title="Exit Tetris"
+            >
+              ✕
+            </button>
+          </div>
+          
+          {/* Tetris Game Container */}
+          <iframe
+            src="/tetris-game/index.html"
+            title="Pinko's Tetris - Full Screen"
+            className="w-full h-full border-0"
+            style={{ 
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            }}
+            onError={() => {
+              console.log('Tetris game failed to load');
             }}
           />
         </div>
