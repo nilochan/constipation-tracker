@@ -34,6 +34,9 @@ const ConstipationReliefTracker = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Make getCurrentUser available to iframe
+  window.getCurrentUser = () => user;
+
   // Bristol Stool Scale definitions with visual icons
   const bristolScale = [
     { 

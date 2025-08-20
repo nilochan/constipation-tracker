@@ -959,48 +959,65 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
     // If Pinecone is configured, use it
     if (pineconeIndex) {
       console.log('Using Pinecone for chat history storage');
-      const batchSize = 10;
+      const batchSize = 5; // Reduce batch size to avoid timeouts
+      
+      try {
+        for (let i = 0; i < chatHistory.length; i += batchSize) {
+          const batch = chatHistory.slice(i, i + batchSize);
+          const vectors = [];
 
-      for (let i = 0; i < chatHistory.length; i += batchSize) {
-        const batch = chatHistory.slice(i, i + batchSize);
-        const vectors = [];
-
-        for (const chat of batch) {
-          try {
-            const embedding = await createEmbedding(chat.message);
-            vectors.push({
-              id: `${userId}-${source}-${Date.now()}-${processed}`,
-              values: embedding,
-              metadata: {
-                userId: userId,
-                source: source,
-                sender: chat.sender,
-                message: chat.message,
-                timestamp: chat.timestamp,
-                type: 'chat_history'
+          for (const chat of batch) {
+            try {
+              // Skip very short messages
+              if (!chat.message || chat.message.length < 3) {
+                processed++;
+                continue;
               }
-            });
-            processed++;
-          } catch (embeddingError) {
-            console.error('Embedding error for message:', chat.message, embeddingError);
+              
+              const embedding = await createEmbedding(chat.message);
+              vectors.push({
+                id: `${userId}-${source}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                values: embedding,
+                metadata: {
+                  userId: String(userId),
+                  source: source,
+                  sender: chat.sender || 'Unknown',
+                  message: chat.message.substring(0, 1000), // Limit message length
+                  timestamp: chat.timestamp || new Date().toISOString(),
+                  type: 'chat_history'
+                }
+              });
+              processed++;
+            } catch (embeddingError) {
+              console.error('Embedding error for message:', chat.message.substring(0, 50), embeddingError);
+              processed++; // Still count as processed
+            }
+          }
+
+          if (vectors.length > 0) {
+            try {
+              await pineconeIndex.upsert(vectors);
+              console.log(`Uploaded batch ${Math.floor(i/batchSize) + 1}, ${vectors.length} vectors`);
+            } catch (upsertError) {
+              console.error('Pinecone upsert error:', upsertError);
+              // Continue processing other batches
+            }
           }
         }
-
-        if (vectors.length > 0) {
-          await pineconeIndex.upsert(vectors);
-        }
+      } catch (pineconeError) {
+        console.error('Pinecone processing error:', pineconeError);
+        // Fall back to local processing
+        processed = chatHistory.length;
       }
     } else {
       // Fallback: just count the messages and store basic info
       console.log('Pinecone not configured, storing basic chat history info');
       processed = chatHistory.length;
       
-      // You could store in a simple table here if needed
       console.log('Chat history received:', {
         messageCount: processed,
         source: source,
-        firstMessage: chatHistory[0],
-        lastMessage: chatHistory[chatHistory.length - 1]
+        sampleMessages: chatHistory.slice(0, 3).map(c => `${c.sender}: ${c.message?.substring(0, 50)}...`)
       });
     }
 

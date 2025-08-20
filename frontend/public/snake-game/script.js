@@ -279,19 +279,31 @@ function showGameOverModal(score) {
         modal.innerHTML = `
             <div class="game-over-text">Winner !!!! 宝贝，你有一份神秘的礼物！</div>
             <div class="game-over-score">得分: ${score}</div>
-            <button class="game-over-button" onclick="restartGame()">再试一次</button>
-            <button class="game-over-button" onclick="goHome()">回主页</button>
+            <button class="game-over-button restart-btn">再试一次</button>
+            <button class="game-over-button home-btn">回主页</button>
         `;
     } else {
         modal.innerHTML = `
             <div class="game-over-text">宝贝，没关系，加油再试！</div>
             <div class="game-over-score">得分: ${score}</div>
-            <button class="game-over-button" onclick="restartGame()">再试一次</button>
-            <button class="game-over-button" onclick="goHome()">回主页</button>
+            <button class="game-over-button restart-btn">再试一次</button>
+            <button class="game-over-button home-btn">回主页</button>
         `;
     }
     
     document.body.appendChild(modal);
+    
+    // Add event listeners after adding to DOM
+    const restartBtn = modal.querySelector('.restart-btn');
+    const homeBtn = modal.querySelector('.home-btn');
+    
+    if (restartBtn) {
+        restartBtn.addEventListener('click', restartGame);
+    }
+    
+    if (homeBtn) {
+        homeBtn.addEventListener('click', goHome);
+    }
 }
 
 function draw() {
@@ -416,8 +428,16 @@ function collision(head, array) {
 // Game Control Functions
 function saveScore(finalScore) {
     const date = new Date().toLocaleDateString();
+    const currentUser = getCurrentUser(); // Get current user info
     const scores = getScores();
-    scores.push({ score: finalScore, date: date });
+    
+    scores.push({ 
+        score: finalScore, 
+        date: date,
+        user: currentUser.username || 'Guest',
+        userId: currentUser.id || 'guest'
+    });
+    
     scores.sort((a, b) => b.score - a.score);
     localStorage.setItem('snakeGameScores', JSON.stringify(scores));
     updateLeaderboard();
@@ -428,13 +448,43 @@ function getScores() {
     return scores ? JSON.parse(scores) : [];
 }
 
+function getCurrentUser() {
+    // Try to get user info from parent window (health tracker)
+    try {
+        if (window.parent && window.parent !== window) {
+            // In iframe - try to get user from parent
+            const parentUser = window.parent.getCurrentUser?.();
+            if (parentUser) return parentUser;
+        }
+        
+        // Fallback: try to get from localStorage token
+        const token = localStorage.getItem('token');
+        if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return { 
+                id: payload.userId, 
+                username: payload.username || 'User' 
+            };
+        }
+    } catch (e) {
+        console.log('Could not get current user:', e);
+    }
+    
+    // Default guest user
+    return { id: 'guest', username: 'Guest' };
+}
+
 function updateLeaderboard() {
     const leaderboardBody = document.querySelector('.leaderboard-table tbody');
-    const scores = getScores();
-    const top5Scores = scores.slice(0, 5);
+    const allScores = getScores();
+    const currentUser = getCurrentUser();
+    
+    // Show current user's top scores
+    const userScores = allScores.filter(score => score.userId === currentUser.id);
+    const top5UserScores = userScores.slice(0, 5);
     
     let html = '';
-    top5Scores.forEach((record, index) => {
+    top5UserScores.forEach((record, index) => {
         html += `
             <tr>
                 <td>${index + 1}</td>
@@ -444,7 +494,7 @@ function updateLeaderboard() {
         `;
     });
     
-    for (let i = top5Scores.length; i < 5; i++) {
+    for (let i = top5UserScores.length; i < 5; i++) {
         html += `
             <tr>
                 <td>${i + 1}</td>
@@ -455,6 +505,12 @@ function updateLeaderboard() {
     }
     
     leaderboardBody.innerHTML = html;
+    
+    // Update leaderboard title to show current user
+    const leaderboardTitle = document.querySelector('.leaderboard h2');
+    if (leaderboardTitle) {
+        leaderboardTitle.textContent = `${currentUser.username}'s Top Scores`;
+    }
 }
 
 function startGame() {
