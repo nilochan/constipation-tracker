@@ -1373,6 +1373,17 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
+// Reset all users to non-admin (one-time fix)
+app.post('/api/debug/reset-all-admins', async (req, res) => {
+  try {
+    const result = await db.run('UPDATE users SET is_admin = FALSE');
+    res.json({ message: `Reset complete. ${result.changes} users set to non-admin.` });
+  } catch (error) {
+    console.error('Reset all admins error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Refresh user data (get updated user info)
 app.get('/api/user/refresh', authenticateToken, async (req, res) => {
   try {
