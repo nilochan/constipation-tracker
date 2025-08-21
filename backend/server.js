@@ -1164,7 +1164,11 @@ app.post('/api/ai/chat', [
       `, [userId, today, today]);
       
     } catch (dbError) {
-      console.log('Database query error:', dbError);
+      console.log('=== DATABASE ERROR IN ASK AI ===');
+      console.log('Error:', dbError);
+      console.log('UserID:', userId);
+      console.log('Today:', today);
+      console.log('================================');
       // Fallback to basic data
       user = { username: 'there' };
       recentData = {};
