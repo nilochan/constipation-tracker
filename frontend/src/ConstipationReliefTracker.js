@@ -1826,39 +1826,6 @@ const ConstipationReliefTracker = () => {
                     </div>
                   </div>
                 )}
-                
-                {/* Display today's saved notes */}
-                {currentData.dailyNotes && currentData.dailyNotes.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    <h3 className="text-md font-medium text-gray-700">Today's Notes:</h3>
-                    {currentData.dailyNotes.map((note) => (
-                      <div key={note.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs text-gray-500">
-                                {new Date(note.created_at).toLocaleString('en-US', { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit',
-                                  hour12: true,
-                                  timeZone: 'Asia/Singapore'
-                                })}
-                              </span>
-                            </div>
-                            <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
-                          </div>
-                          <button
-                            onClick={() => deleteDailyNote(note.id)}
-                            className="ml-3 text-red-500 hover:text-red-700 text-sm"
-                            title="Delete note"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
               </div>
             </div>
