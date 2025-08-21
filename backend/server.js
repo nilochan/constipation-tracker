@@ -1235,7 +1235,7 @@ Health Data for ${recentData?.date || 'today'}:
 
 User question: "${message}"
 
-Please answer their question using their specific data shown above. Be supportive and reference their actual numbers when relevant. Keep response to 2-3 sentences.`;
+Please answer their question using their specific data shown above. Be supportive and reference their actual numbers when relevant. Keep response to 2-3 sentences. Do not use markdown formatting like ** for bold text.`;
 
     // DEBUG: Log the actual prompt being sent to AI
     console.log('=== AI PROMPT DEBUG ===');
