@@ -1073,6 +1073,31 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
   }
 });
 
+// Debug endpoint to check daily notes
+app.get('/api/debug/daily-notes', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get ALL daily notes for this user
+    const allNotes = await db.all(`
+      SELECT id, user_id, date, note, created_at 
+      FROM daily_notes 
+      WHERE user_id = ? 
+      ORDER BY date DESC, created_at DESC
+    `, [userId]);
+
+    res.json({
+      userId,
+      totalNotes: allNotes.length,
+      notes: allNotes,
+      message: 'All daily notes for debugging'
+    });
+  } catch (error) {
+    console.error('Daily notes debug error:', error);
+    res.status(500).json({ error: 'Failed to get daily notes debug data' });
+  }
+});
+
 // Debug endpoint to check AI data retrieval
 app.get('/api/ai/debug-data', authenticateToken, async (req, res) => {
   try {
