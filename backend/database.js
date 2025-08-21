@@ -194,6 +194,22 @@ class Database {
       )
     `);
 
+    // Chat history table for DeepSeek analysis
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS chat_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        date TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        message TEXT NOT NULL,
+        keywords TEXT,
+        sentiment REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+
     console.log('Database tables initialized');
   }
 

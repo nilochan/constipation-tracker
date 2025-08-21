@@ -11,7 +11,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const { Pinecone } = require('@pinecone-database/pinecone');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -764,60 +763,35 @@ app.get('/api/profile/export', async (req, res) => {
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'your-deepseek-api-key';
 
-// Pinecone configuration for chat history
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
-const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'health-chat-history';
+// Chat history will be stored in SQLite and analyzed with DeepSeek
 
-let pinecone = null;
-let pineconeIndex = null;
-
-// Initialize Pinecone if configured (non-blocking)
-const initializePinecone = async () => {
-  if (PINECONE_API_KEY) {
-    try {
-      pinecone = new Pinecone({
-        apiKey: PINECONE_API_KEY,
-      });
-      pineconeIndex = pinecone.index(PINECONE_INDEX_NAME);
-      console.log('Pinecone initialized successfully');
-    } catch (error) {
-      console.log('Pinecone not configured or failed to initialize:', error.message);
-      pinecone = null;
-      pineconeIndex = null;
-    }
-  } else {
-    console.log('Pinecone API key not provided - chat history will use fallback');
-  }
-};
-
-// Initialize Pinecone in background (don't block server startup)
-initializePinecone().catch(error => {
-  console.log('Pinecone background initialization failed:', error.message);
-});
-
-// Function to create embeddings using DeepSeek (or a simple hash for fallback)
-const createEmbedding = async (text) => {
+// DeepSeek-powered chat analysis functions
+const extractChatKeywords = async (message) => {
   try {
-    // Simple text processing for embedding simulation
-    // In production, you'd use a proper embedding model
-    const words = text.toLowerCase().split(/\s+/);
-    const embedding = new Array(384).fill(0); // 384-dimensional vector
-    
-    // Simple hash-based embedding simulation
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      for (let j = 0; j < word.length; j++) {
-        const charCode = word.charCodeAt(j);
-        embedding[j % 384] += charCode;
-      }
+    if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'your-deepseek-api-key') {
+      return null;
     }
-    
-    // Normalize the vector
-    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-    return embedding.map(val => magnitude > 0 ? val / magnitude : 0);
+
+    const response = await axios.post(DEEPSEEK_API_URL, {
+      model: 'deepseek-chat',
+      messages: [{
+        role: 'user',
+        content: `Extract 3-5 key concepts from this message as a JSON array: "${message.substring(0, 500)}"`
+      }],
+      max_tokens: 100
+    }, {
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 5000
+    });
+
+    const keywords = response.data.choices[0].message.content;
+    return keywords;
   } catch (error) {
-    console.error('Error creating embedding:', error);
-    return new Array(384).fill(0);
+    console.log('DeepSeek keyword extraction failed:', error.message);
+    return null;
   }
 };
 
@@ -944,6 +918,7 @@ Start your response with "Dear ${user?.username || 'there'}," and provide a supp
 });
 
 // Upload and process chat history (Admin only)
+// Simple chat history upload with DeepSeek analysis
 app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
   body('chatHistory').isArray({ min: 1 }),
   body('source').isIn(['whatsapp', 'line', 'other'])
@@ -957,126 +932,69 @@ app.post('/api/ai/upload-chat-history', authenticateToken, requireAdmin, [
     const userId = req.user.userId;
     const { chatHistory, source } = req.body;
 
-    // Validate chat history format
-    if (!Array.isArray(chatHistory)) {
-      return res.status(400).json({ error: 'Chat history must be an array' });
-    }
-    
-    if (chatHistory.length === 0) {
-      return res.status(400).json({ error: 'Chat history cannot be empty' });
-    }
-    
-    // Validate first few messages for proper format
-    for (let i = 0; i < Math.min(3, chatHistory.length); i++) {
-      const msg = chatHistory[i];
-      if (!msg.message || !msg.sender) {
-        return res.status(400).json({ 
-          error: `Invalid message format at index ${i}. Expected {message, sender, timestamp}`,
-          received: msg
-        });
-      }
-    }
-
-    console.log('Received chat history upload:', {
-      userId,
-      source,
-      historyLength: chatHistory.length,
-      pineconeConfigured: !!pineconeIndex,
-      pineconeApiKey: !!PINECONE_API_KEY,
-      sampleMessage: chatHistory[0]
-    });
+    console.log(`📥 Chat history upload: ${chatHistory.length} messages from ${source}`);
 
     let processed = 0;
+    let skipped = 0;
 
-    // If Pinecone is configured, use it
-    if (pineconeIndex) {
-      console.log('Using Pinecone for chat history storage');
-      const batchSize = 5; // Reduce batch size to avoid timeouts
+    // Process messages in batches to avoid memory issues
+    const batchSize = 100;
+    for (let i = 0; i < chatHistory.length; i += batchSize) {
+      const batch = chatHistory.slice(i, i + batchSize);
       
-      try {
-        for (let i = 0; i < chatHistory.length; i += batchSize) {
-          const batch = chatHistory.slice(i, i + batchSize);
-          const vectors = [];
+      for (const chat of batch) {
+        try {
+          // Skip invalid messages
+          if (!chat.message || !chat.sender || chat.message.length < 2) {
+            skipped++;
+            continue;
+          }
 
-          for (const chat of batch) {
+          // Extract date from timestamp or use current date
+          let chatDate = new Date().toISOString().split('T')[0];
+          if (chat.timestamp) {
             try {
-              // Skip very short messages
-              if (!chat.message || chat.message.length < 3) {
-                processed++;
-                continue;
-              }
-              
-              const embedding = await createEmbedding(chat.message);
-              vectors.push({
-                id: `${userId}-${source}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                values: embedding,
-                metadata: {
-                  userId: String(userId),
-                  source: source,
-                  sender: chat.sender || 'Unknown',
-                  message: chat.message.substring(0, 1000), // Limit message length
-                  timestamp: chat.timestamp || new Date().toISOString(),
-                  type: 'chat_history'
-                }
-              });
-              processed++;
-            } catch (embeddingError) {
-              console.error('Embedding error for message:', chat.message.substring(0, 50), embeddingError);
-              processed++; // Still count as processed
+              chatDate = new Date(chat.timestamp).toISOString().split('T')[0];
+            } catch (dateError) {
+              console.log('Invalid timestamp, using current date:', chat.timestamp);
             }
           }
 
-          if (vectors.length > 0) {
-            try {
-              await pineconeIndex.upsert(vectors);
-              console.log(`Uploaded batch ${Math.floor(i/batchSize) + 1}, ${vectors.length} vectors`);
-            } catch (upsertError) {
-              console.error('Pinecone upsert error:', upsertError);
-              // Continue processing other batches
-            }
-          }
+          // Store in SQLite for reliable access
+          await db.run(`
+            INSERT INTO chat_history (user_id, source, date, sender, message)
+            VALUES (?, ?, ?, ?, ?)
+          `, [userId, source, chatDate, chat.sender, chat.message.substring(0, 2000)]);
+          
+          processed++;
+        } catch (insertError) {
+          console.error('Error inserting message:', insertError);
+          skipped++;
         }
-      } catch (pineconeError) {
-        console.error('Pinecone processing error:', pineconeError);
-        // Fall back to local processing
-        processed = chatHistory.length;
       }
-    } else {
-      // Fallback: just count the messages and store basic info
-      console.log('Pinecone not configured, storing basic chat history info');
-      processed = chatHistory.length;
       
-      console.log('Chat history received:', {
-        messageCount: processed,
-        source: source,
-        sampleMessages: chatHistory.slice(0, 3).map(c => `${c.sender}: ${c.message?.substring(0, 50)}...`)
-      });
+      console.log(`📊 Processed batch ${Math.floor(i/batchSize) + 1}: ${batch.length} messages`);
     }
 
-    // Ensure we always have a processed count
-    if (processed === 0) {
-      processed = chatHistory.length;
-    }
-
-    // Log chat history upload activity
-    await logActivity(userId, req.user.username, 'CHAT_HISTORY_UPLOAD', `Uploaded ${processed} messages from ${source}${pineconeIndex ? ' (Pinecone)' : ' (local)'}`, req);
-
-    const responseMessage = pineconeIndex 
-      ? `Successfully processed ${processed} chat messages from ${source} and stored in vector database`
-      : `Successfully received ${processed} chat messages from ${source}. Set up Pinecone for AI integration.`;
+    // Log activity
+    await logActivity(userId, req.user.username, 'CHAT_HISTORY_UPLOAD', 
+      `Uploaded ${processed} messages from ${source} (skipped ${skipped})`, req);
 
     res.json({ 
-      message: responseMessage,
+      message: `Successfully uploaded ${processed} chat messages from ${source}`,
       processed: processed,
-      pineconeConfigured: !!pineconeIndex
+      skipped: skipped,
+      totalReceived: chatHistory.length,
+      features: [
+        "📅 Date-based organization",
+        "🔍 Smart search by date ranges", 
+        "📊 DeepSeek-powered analysis",
+        "🎯 'This day last year' insights"
+      ]
     });
+
   } catch (error) {
     console.error('Chat history upload error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      type: error.constructor.name
-    });
     res.status(500).json({ 
       error: 'Failed to process chat history',
       details: error.message
