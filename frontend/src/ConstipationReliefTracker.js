@@ -34,6 +34,7 @@ const ConstipationReliefTracker = () => {
   const [showTetrisFullscreen, setShowTetrisFullscreen] = useState(false);
   const [currentMessage, setCurrentMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [notesHistoryExpanded, setNotesHistoryExpanded] = useState(false);
 
   // Make getCurrentUser available to iframe
   window.getCurrentUser = () => user;
@@ -1390,7 +1391,7 @@ const ConstipationReliefTracker = () => {
                 : 'bg-white text-gray-700 hover:bg-gray-100'
             }`}
           >
-            🔮 Future Games
+            🎮 Games
           </button>
         </div>
 
@@ -1874,7 +1875,7 @@ const ConstipationReliefTracker = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">AI Health Insights</h2>
-                    <p className="text-sm text-gray-600">Personalized analysis of your wellness data</p>
+                    <p className="text-sm text-gray-600">Personalized analysis of {user?.username || 'your'}'s wellness data</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -1930,7 +1931,7 @@ const ConstipationReliefTracker = () => {
 
               <div className="mt-4 text-center">
                 <p className="text-xs text-gray-500">
-                  💡 AI insights are based on your tracked data. Always consult your doctor for medical advice.
+                  💡 AI insights are based on {user?.username || 'your'}'s tracked data. Always consult your doctor for medical advice and also inform 🐻 Bearo 🐻 as well !
                 </p>
               </div>
             </div>
@@ -2154,59 +2155,69 @@ const ConstipationReliefTracker = () => {
 
             {/* Daily Notes History - Moved to Bottom */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">📝</span>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm">📝</span>
+                  </div>
+                  <h2 className="text-lg font-semibold text-gray-800">Daily Notes History (30 Days)</h2>
                 </div>
-                <h2 className="text-lg font-semibold text-gray-800">Daily Notes History (30 Days)</h2>
+                <button
+                  onClick={() => setNotesHistoryExpanded(!notesHistoryExpanded)}
+                  className="text-pink-500 hover:text-pink-600 text-lg font-bold transition-colors"
+                >
+                  {notesHistoryExpanded ? '−' : '+'}
+                </button>
               </div>
               
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {analyticsData?.dailyNotes && analyticsData.dailyNotes.length > 0 ? (
-                  analyticsData.dailyNotes.map((note) => (
-                    <div key={note.id} className="bg-gradient-to-r from-green-50 to-teal-50 rounded-lg p-4 border border-green-100">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium text-gray-700">
-                              {new Date(note.date).toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                month: 'short', 
-                                day: 'numeric' 
-                              })}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {(() => {
-                                const utcDate = new Date(note.created_at);
-                                const sgTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours for Singapore
-                                return sgTime.toLocaleString('en-US', { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit',
-                                  hour12: true
-                                });
-                              })()}
-                            </span>
+              {notesHistoryExpanded && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {analyticsData?.dailyNotes && analyticsData.dailyNotes.length > 0 ? (
+                    analyticsData.dailyNotes.map((note) => (
+                      <div key={note.id} className="bg-gradient-to-r from-green-50 to-teal-50 rounded-lg p-4 border border-green-100">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-medium text-gray-700">
+                                {new Date(note.date).toLocaleDateString('en-US', { 
+                                  weekday: 'long', 
+                                  month: 'short', 
+                                  day: 'numeric' 
+                                })}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {(() => {
+                                  const utcDate = new Date(note.created_at);
+                                  const sgTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours for Singapore
+                                  return sgTime.toLocaleString('en-US', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: true
+                                  });
+                                })()}
+                              </span>
+                            </div>
+                            <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
                           </div>
-                          <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
+                          <button
+                            onClick={() => deleteDailyNote(note.id)}
+                            className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center transition-colors text-xs ml-3"
+                            title="Delete note"
+                          >
+                            ✕
+                          </button>
                         </div>
-                        <button
-                          onClick={() => deleteDailyNote(note.id)}
-                          className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center transition-colors text-xs ml-3"
-                          title="Delete note"
-                        >
-                          ✕
-                        </button>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-4xl mb-3">📝</div>
+                      <div className="text-gray-500 text-sm">No notes recorded in the past 30 days</div>
+                      <div className="text-xs text-gray-400 mt-1">Start adding daily notes to see them here</div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="text-4xl mb-3">📝</div>
-                    <div className="text-gray-500 text-sm">No notes recorded in the past 30 days</div>
-                    <div className="text-xs text-gray-400 mt-1">Start adding daily notes to see them here</div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2215,8 +2226,8 @@ const ConstipationReliefTracker = () => {
           <div className="space-y-6">
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">🔮 Future Games</h2>
-                <p className="text-gray-600">Exciting games are coming soon to make your health tracking journey more fun!</p>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">🎮 Games</h2>
+                <p className="text-gray-600">Play Pinko's Tetris and more Exciting games are coming soon to make your health tracking journey more fun!</p>
               </div>
               
               {/* Coming Soon Games */}
@@ -2224,9 +2235,9 @@ const ConstipationReliefTracker = () => {
                 
                 {/* Tetris Game - NOW AVAILABLE! */}
                 <div className="bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg p-6 text-white text-center">
-                  <div className="text-4xl mb-3">🐰🐻</div>
+                  <div className="text-4xl mb-3">🐰🐻🦆🐱🐧🐸🐹</div>
                   <h3 className="text-xl font-bold mb-2">Pinko's Tetris</h3>
-                  <p className="text-sm opacity-90 mb-4">Cony & Brown love blocks! Stack with love! 💕</p>
+                  <p className="text-sm opacity-90 mb-4">Cony, Brown, Sally, Choco, James, Leonard & Boss love blocks! Stack with love! 💕</p>
                   <button
                     onClick={() => setShowTetrisFullscreen(true)}
                     className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg px-4 py-2 text-sm transition-colors font-bold"

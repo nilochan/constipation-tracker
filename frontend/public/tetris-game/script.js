@@ -47,8 +47,8 @@ const PIECES = {
             [1,1,1]
         ],
         color: '#FFB6C1', // Light pink
-        name: 'Love T',
-        emoji: '💕'
+        name: 'Sally T',
+        emoji: '🦆'
     },
     S: {
         shape: [
@@ -56,8 +56,8 @@ const PIECES = {
             [1,1,0]
         ],
         color: '#DDA0DD', // Plum
-        name: 'Heart S',
-        emoji: '💜'
+        name: 'Choco S',
+        emoji: '🐱'
     },
     Z: {
         shape: [
@@ -65,8 +65,8 @@ const PIECES = {
             [0,1,1]
         ],
         color: '#F0E68C', // Khaki
-        name: 'Star Z',
-        emoji: '⭐'
+        name: 'James Z',
+        emoji: '🐧'
     },
     J: {
         shape: [
@@ -74,8 +74,8 @@ const PIECES = {
             [1,1,1]
         ],
         color: '#87CEEB', // Sky blue
-        name: 'Dream J',
-        emoji: '💙'
+        name: 'Leonard J',
+        emoji: '🐸'
     },
     L: {
         shape: [
@@ -83,8 +83,8 @@ const PIECES = {
             [1,1,1]
         ],
         color: '#98FB98', // Pale green
-        name: 'Hope L',
-        emoji: '💚'
+        name: 'Boss L',
+        emoji: '🐹'
     }
 };
 

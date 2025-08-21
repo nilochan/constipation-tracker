@@ -205,7 +205,7 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
         </div>
 
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-semibold text-blue-800 mb-2">For Your Wife:</h3>
+          <h3 className="font-semibold text-blue-800 mb-2">🐰 For Dearo 🐰:</h3>
           <ul className="text-sm text-blue-700 space-y-1">
             <li>• Your data is saved securely</li>
             <li>• Access from any device with login</li>
