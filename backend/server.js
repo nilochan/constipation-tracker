@@ -821,7 +821,7 @@ app.post('/api/ai/daily-summary', async (req, res) => {
     
     // Get today's data with more detailed information
     const dailyData = await db.get('SELECT * FROM daily_data WHERE user_id = ? AND date = ?', [userId, date]);
-    const bowelMovements = await db.all('SELECT bristol_scale, timing, notes FROM bowel_movements WHERE user_id = ? AND date = ?', [userId, date]);
+    const bowelMovements = await db.all('SELECT bristol_type as bristol_scale, time as timing, created_at as notes FROM bowel_movements WHERE user_id = ? AND date = ?', [userId, date]);
     const symptoms = await db.get('SELECT * FROM symptoms WHERE user_id = ? AND date = ?', [userId, date]);
     const notes = await db.all('SELECT note FROM daily_notes WHERE user_id = ? AND date = ?', [userId, date]);
 
@@ -1121,13 +1121,10 @@ app.post('/api/ai/chat', [
 
     // Get user info for personalized responses (with error handling)
     let user, recentData, recentBMs, recentSymptoms, recentNotes;
+    const today = new Date().toISOString().split('T')[0];
     
     try {
       user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
-      
-      // Get recent user data for context (extended time range)
-      // First try today's data, then fall back to recent data
-      const today = new Date().toISOString().split('T')[0];
       recentData = await db.get(`
         SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
         FROM daily_data dd
@@ -1138,7 +1135,7 @@ app.post('/api/ai/chat', [
       
       // Get recent bowel movements with notes (extended time range)
       recentBMs = await db.all(`
-        SELECT bristol_scale, timing, notes, date
+        SELECT bristol_type as bristol_scale, time as timing, created_at as notes, date
         FROM bowel_movements 
         WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
         ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
