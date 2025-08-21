@@ -211,6 +211,9 @@ const ConstipationReliefTracker = () => {
       const response = await ApiService.login(credentials);
       setUser(response.user);
       setIsAuthenticated(true);
+      // Clear any previous user's chat messages for privacy
+      setChatMessages([]);
+      setAiSummary({ daily: '', weekly: '', loading: false });
     } catch (error) {
       throw error;
     } finally {
@@ -224,6 +227,9 @@ const ConstipationReliefTracker = () => {
       const response = await ApiService.register(userData);
       setUser(response.user);
       setIsAuthenticated(true);
+      // Clear any existing state for new user registration
+      setChatMessages([]);
+      setAiSummary({ daily: '', weekly: '', loading: false });
     } catch (error) {
       throw error;
     } finally {
@@ -237,6 +243,10 @@ const ConstipationReliefTracker = () => {
     setUser(null);
     setDailyData({});
     setAnalyticsData(null);
+    // Clear chat messages to prevent bleeding between users
+    setChatMessages([]);
+    // Clear AI summaries as well for user privacy
+    setAiSummary({ daily: '', weekly: '', loading: false });
   };
 
   // Get current day data
