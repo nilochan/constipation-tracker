@@ -2176,12 +2176,15 @@ const ConstipationReliefTracker = () => {
                               })}
                             </span>
                             <span className="text-xs text-gray-500">
-                              {new Date(note.created_at).toLocaleString('en-US', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                hour12: true,
-                                timeZone: 'Asia/Singapore'
-                              })}
+                              {(() => {
+                                const utcDate = new Date(note.created_at);
+                                const sgTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours for Singapore
+                                return sgTime.toLocaleString('en-US', { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit',
+                                  hour12: true
+                                });
+                              })()}
                             </span>
                           </div>
                           <p className="text-gray-800 text-sm leading-relaxed">{note.note}</p>
