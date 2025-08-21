@@ -1060,172 +1060,165 @@ app.get('/api/ai/debug-data', authenticateToken, async (req, res) => {
   }
 });
 
-// Chat with AI assistant (enhanced with chat history context)
-app.post('/api/ai/chat', [
-  body('message').isLength({ min: 1, max: 500 }).trim()
-], async (req, res) => {
+// ASK AI with comprehensive database integration and personalized DeepSeek responses
+app.post('/api/ai/chat', authenticateToken, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const userId = req.user.userId;
     const { message } = req.body;
+    const userId = req.user.userId;
+    
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
 
-    // Get user info for personalized responses (with error handling)
-    let user, recentData, recentBMs, recentSymptoms, recentNotes, allRecentData;
+    console.log('🧠 ASK AI request from user:', req.user.username);
+    console.log('📝 Question:', message);
+
+    // Get user's recent health data for context
     const today = new Date().toISOString().split('T')[0];
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    try {
-      user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
-      recentData = await db.get(`
-        SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
-        FROM daily_data dd
-        WHERE dd.user_id = ? AND (dd.date = ? OR dd.date >= date('now', '-30 days'))
-        ORDER BY CASE WHEN dd.date = ? THEN 0 ELSE 1 END, dd.date DESC
-        LIMIT 1
-      `, [userId, today, today]);
-      
-      // Get recent bowel movements with notes (extended time range)
-      recentBMs = await db.all(`
-        SELECT bristol_type as bristol_scale, time as timing, created_at as notes, date
-        FROM bowel_movements 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
-        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
-        LIMIT 10
-      `, [userId, today, today]);
-      
-      // Get recent symptoms (extended time range)
-      recentSymptoms = await db.get(`
-        SELECT bloating, abdominal_pain, date
-        FROM symptoms 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
-        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
-        LIMIT 1
-      `, [userId, today, today]);
-      
-      // Get recent notes (extended time range)
-      recentNotes = await db.all(`
-        SELECT note, date
-        FROM daily_notes 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
-        ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
-        LIMIT 10
-      `, [userId, today, today]);
+    const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
+    
+    // Get recent daily data
+    const recentData = await db.all(`
+      SELECT date, water_glasses, mood, stress_level, sleep_quality, notes
+      FROM daily_data 
+      WHERE user_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC LIMIT 7
+    `, [userId, weekAgo, today]);
 
-      // Get ALL daily data for the past 30 days for analysis
-      allRecentData = await db.all(`
-        SELECT water_glasses, mood, stress_level, sleep_quality, date
-        FROM daily_data 
-        WHERE user_id = ? AND date >= date('now', '-30 days')
-        ORDER BY date DESC
-      `, [userId]);
-      
-    } catch (dbError) {
-      console.log('=== DATABASE ERROR IN ASK AI ===');
-      console.log('Error:', dbError);
-      console.log('UserID:', userId);
-      console.log('Today:', today);
-      console.log('================================');
-      // Fallback to basic data
-      user = { username: 'there' };
-      recentData = {};
-      recentBMs = [];
-      recentSymptoms = {};
-      recentNotes = [];
-      allRecentData = [];
+    // Get recent bowel movements
+    const recentBowelMovements = await db.all(`
+      SELECT date, time, bristol_type, urgency, straining, satisfaction
+      FROM bowel_movements 
+      WHERE user_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC, time DESC LIMIT 10
+    `, [userId, weekAgo, today]);
+
+    // Get recent symptoms
+    const recentSymptoms = await db.all(`
+      SELECT date, bloating, abdominal_pain, nausea, fatigue
+      FROM symptoms 
+      WHERE user_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC LIMIT 7
+    `, [userId, weekAgo, today]);
+
+    // Get recent meals
+    const recentMeals = await db.all(`
+      SELECT date, meal_type, food_items, trigger_foods
+      FROM meals 
+      WHERE user_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC LIMIT 10
+    `, [userId, weekAgo, today]);
+
+    // Get recent daily notes
+    const recentNotes = await db.all(`
+      SELECT date, note
+      FROM daily_notes 
+      WHERE user_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC LIMIT 10
+    `, [userId, weekAgo, today]);
+
+    console.log('📊 Retrieved user data:', {
+      dailyData: recentData.length,
+      bowelMovements: recentBowelMovements.length,
+      symptoms: recentSymptoms.length,
+      meals: recentMeals.length,
+      notes: recentNotes.length
+    });
+
+    // Format context data for DeepSeek
+    let healthContext = `User: ${user?.username || 'User'}\n`;
+    healthContext += `Recent Health Data (Past 7 days):\n\n`;
+
+    // Add daily data context
+    if (recentData.length > 0) {
+      healthContext += `Daily Tracking:\n`;
+      recentData.forEach(day => {
+        healthContext += `• ${day.date}: Water ${day.water_glasses || 0} glasses, Mood ${day.mood || 'N/A'}/5, Stress ${day.stress_level || 'N/A'}/10, Sleep ${day.sleep_quality || 'N/A'}/5\n`;
+        if (day.notes) healthContext += `  Notes: ${day.notes}\n`;
+      });
+      healthContext += '\n';
     }
-    
-    // DEBUG: Log what data we actually found
-    console.log('=== AI CHAT DEBUG ===');
-    console.log('User:', user);
-    console.log('Recent Data:', recentData);
-    console.log('Recent BMs:', recentBMs);
-    console.log('Recent Symptoms:', recentSymptoms);
-    console.log('Recent Notes:', recentNotes);
-    console.log('====================')
 
-    let chatHistoryContext = '';
+    // Add bowel movement context
+    if (recentBowelMovements.length > 0) {
+      healthContext += `Recent Bowel Movements:\n`;
+      recentBowelMovements.slice(0, 5).forEach(bm => {
+        healthContext += `• ${bm.date} ${bm.time}: Bristol Type ${bm.bristol_type}, Urgency ${bm.urgency}/5, Straining: ${bm.straining ? 'Yes' : 'No'}, Satisfaction ${bm.satisfaction}/5\n`;
+      });
+      healthContext += '\n';
+    }
 
-    // Search chat history if Pinecone is available
-    if (pineconeIndex) {
-      try {
-        const messageEmbedding = await createEmbedding(message);
-        const searchResults = await pineconeIndex.query({
-          vector: messageEmbedding,
-          topK: 3,
-          filter: { userId: userId },
-          includeMetadata: true
-        });
-
-        if (searchResults.matches && searchResults.matches.length > 0) {
-          const relevantChats = searchResults.matches
-            .filter(match => match.score > 0.5) // Only include relevant matches
-            .map(match => `${match.metadata.sender}: ${match.metadata.message}`)
-            .join('\n');
-          
-          if (relevantChats) {
-            chatHistoryContext = `\n\nRelevant past conversations:\n${relevantChats}`;
-          }
+    // Add symptoms context
+    if (recentSymptoms.length > 0) {
+      healthContext += `Recent Symptoms:\n`;
+      recentSymptoms.forEach(symptom => {
+        if (symptom.bloating > 0 || symptom.abdominal_pain > 0 || symptom.nausea > 0 || symptom.fatigue > 0) {
+          healthContext += `• ${symptom.date}: Bloating ${symptom.bloating}/5, Pain ${symptom.abdominal_pain}/5, Nausea ${symptom.nausea}/5, Fatigue ${symptom.fatigue}/5\n`;
         }
-      } catch (error) {
-        console.log('Chat history search failed:', error.message);
-      }
+      });
+      healthContext += '\n';
     }
 
-    // Format detailed context information with safety checks
-    const bmSummary = (recentBMs && recentBMs.length > 0) ? 
-      recentBMs.map(bm => 
-        `${bm.date}: Bristol ${bm.bristol_scale} at ${bm.timing}${bm.notes ? ' (Note: ' + bm.notes + ')' : ''}`
-      ).join('\n') : 'No recent bowel movements recorded';
+    // Add meals context
+    if (recentMeals.length > 0) {
+      healthContext += `Recent Meals:\n`;
+      recentMeals.slice(0, 3).forEach(meal => {
+        healthContext += `• ${meal.date} ${meal.meal_type}: ${meal.food_items}`;
+        if (meal.trigger_foods) healthContext += ` (Triggers: ${meal.trigger_foods})`;
+        healthContext += '\n';
+      });
+      healthContext += '\n';
+    }
+
+    // Add daily notes context
+    if (recentNotes.length > 0) {
+      healthContext += `Recent Notes:\n`;
+      recentNotes.slice(0, 3).forEach(note => {
+        healthContext += `• ${note.date}: ${note.note}\n`;
+      });
+      healthContext += '\n';
+    }
+
+    // Create personalized prompt for DeepSeek
+    const personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their question.
+
+${healthContext}
+
+User's Question: ${message}
+
+Instructions:
+- Give personalized advice based on their actual health data shown above
+- Be warm, supportive, and encouraging
+- Reference specific patterns you see in their data when relevant
+- Keep response concise (2-3 sentences max)
+- Always remind them to consult a doctor for medical concerns
+- Use supportive emojis appropriately`;
+
+    // Call DeepSeek API
+    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+
+    if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'your-deepseek-api-key') {
+      console.log('⚠️ DeepSeek API key not configured, using fallback response');
+      return res.json({
+        response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    console.log('🚀 Calling DeepSeek API for personalized response...');
     
-    const notesSummary = (recentNotes && recentNotes.length > 0) ?
-      recentNotes.map(note => 
-        `${note.date}: ${note.note}`
-      ).join('\n') : 'No recent notes/remarks';
-
-    // Create data context summary
-    const dataAvailable = allRecentData?.length || 0;
-    const dateRange = dataAvailable > 0 ? 
-      `from ${allRecentData[allRecentData.length - 1]?.date} to ${allRecentData[0]?.date}` : 
-      'limited data available';
-    
-    // Calculate weekly averages if we have enough data
-    const weeklyStats = dataAvailable > 0 ? 
-      `Weekly averages (${dataAvailable} days): Water ${(allRecentData.reduce((sum, d) => sum + (d.water_glasses || 0), 0) / dataAvailable).toFixed(1)} glasses/day, Mood ${(allRecentData.filter(d => d.mood).reduce((sum, d) => sum + d.mood, 0) / allRecentData.filter(d => d.mood).length || 0).toFixed(1)}/5, Stress ${(allRecentData.filter(d => d.stress_level).reduce((sum, d) => sum + d.stress_level, 0) / allRecentData.filter(d => d.stress_level).length || 0).toFixed(1)}/10` :
-      'No weekly data available';
-
-    const contextPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. You have access to their health tracking data.
-
-DATA CONTEXT: You have access to ${dataAvailable} days of data ${dateRange}. When asked about weekly, monthly, or trend analysis, use ALL available data to provide insights.
-
-LATEST DATA (${recentData?.date || 'today'}):
-- Water intake: ${recentData?.water_glasses || 0} glasses
-- Mood: ${recentData?.mood || 'Not recorded'}/5
-- Stress level: ${recentData?.stress_level || 'Not recorded'}/10
-- Sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
-- Bowel movements: ${bmSummary}
-- Symptoms: Bloating ${recentSymptoms?.bloating || 0}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 0}/5
-- Notes: ${notesSummary}
-
-ANALYSIS DATA: ${weeklyStats}
-
-ALL DAILY DATA (for analysis): ${allRecentData?.map(d => `${d.date}: ${d.water_glasses || 0} glasses, mood ${d.mood || 'N/A'}/5, stress ${d.stress_level || 'N/A'}/10`).join('; ') || 'No historical data'}${chatHistoryContext}
-
-User question: "${message}"
-
-INSTRUCTIONS: Use ALL available data above to answer questions. For weekly/monthly analysis, calculate from available data and mention the timeframe. Be analytical and helpful. Keep responses 2-3 sentences. No markdown formatting.`;
-
-    // DEBUG: Log the actual prompt being sent to AI
-    console.log('=== AI PROMPT DEBUG ===');
-    console.log('AI Prompt:', contextPrompt);
-    console.log('========================');
-
-    const response = await axios.post(DEEPSEEK_API_URL, {
+    const deepseekResponse = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
-      messages: [{ role: 'user', content: contextPrompt }],
-      max_tokens: 200,
+      messages: [
+        {
+          role: 'user',
+          content: personalizedPrompt
+        }
+      ],
+      max_tokens: 300,
       temperature: 0.7
     }, {
       headers: {
@@ -1235,14 +1228,35 @@ INSTRUCTIONS: Use ALL available data above to answer questions. For weekly/month
       timeout: 10000
     });
 
-    res.json({ 
-      response: response.data.choices[0].message.content,
+    const aiResponse = deepseekResponse.data.choices[0].message.content;
+    
+    console.log('✅ DeepSeek response generated successfully');
+
+    res.json({
+      response: aiResponse,
       timestamp: new Date().toISOString(),
-      usedChatHistory: !!chatHistoryContext
+      hasHealthContext: recentData.length > 0 || recentBowelMovements.length > 0
     });
+
   } catch (error) {
-    console.error('AI Chat error:', error.response?.data || error.message);
-    res.json({ 
+    console.error('ASK AI error:', error);
+    
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.json({
+        response: "I'm having trouble connecting to the AI service right now. Please try again in a moment! 🤖",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (error.response?.status === 429) {
+      return res.json({
+        response: "I'm getting too many requests right now. Please wait a moment and try again! ⏰",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Fallback response
+    res.json({
       response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
       timestamp: new Date().toISOString()
     });
@@ -1589,6 +1603,7 @@ app.get('/api/tetris/leaderboard', authenticateToken, async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
+
 
 // Serve React app for all non-API routes
 app.get('*', (req, res) => {
