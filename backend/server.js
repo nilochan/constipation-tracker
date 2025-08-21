@@ -771,18 +771,29 @@ const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'health-chat-hist
 let pinecone = null;
 let pineconeIndex = null;
 
-// Initialize Pinecone if configured
-if (PINECONE_API_KEY) {
-  try {
-    pinecone = new Pinecone({
-      apiKey: PINECONE_API_KEY,
-    });
-    pineconeIndex = pinecone.index(PINECONE_INDEX_NAME);
-    console.log('Pinecone initialized successfully');
-  } catch (error) {
-    console.log('Pinecone not configured or failed to initialize:', error.message);
+// Initialize Pinecone if configured (non-blocking)
+const initializePinecone = async () => {
+  if (PINECONE_API_KEY) {
+    try {
+      pinecone = new Pinecone({
+        apiKey: PINECONE_API_KEY,
+      });
+      pineconeIndex = pinecone.index(PINECONE_INDEX_NAME);
+      console.log('Pinecone initialized successfully');
+    } catch (error) {
+      console.log('Pinecone not configured or failed to initialize:', error.message);
+      pinecone = null;
+      pineconeIndex = null;
+    }
+  } else {
+    console.log('Pinecone API key not provided - chat history will use fallback');
   }
-}
+};
+
+// Initialize Pinecone in background (don't block server startup)
+initializePinecone().catch(error => {
+  console.log('Pinecone background initialization failed:', error.message);
+});
 
 // Function to create embeddings using DeepSeek (or a simple hash for fallback)
 const createEmbedding = async (text) => {
