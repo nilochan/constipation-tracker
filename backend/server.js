@@ -1120,7 +1120,7 @@ app.post('/api/ai/chat', [
     const { message } = req.body;
 
     // Get user info for personalized responses (with error handling)
-    let user, recentData, recentBMs, recentSymptoms, recentNotes;
+    let user, recentData, recentBMs, recentSymptoms, recentNotes, allRecentData;
     const today = new Date().toISOString().split('T')[0];
     
     try {
@@ -1128,7 +1128,7 @@ app.post('/api/ai/chat', [
       recentData = await db.get(`
         SELECT dd.water_glasses, dd.mood, dd.stress_level, dd.sleep_quality, dd.date
         FROM daily_data dd
-        WHERE dd.user_id = ? AND (dd.date = ? OR dd.date >= date('now', '-14 days'))
+        WHERE dd.user_id = ? AND (dd.date = ? OR dd.date >= date('now', '-30 days'))
         ORDER BY CASE WHEN dd.date = ? THEN 0 ELSE 1 END, dd.date DESC
         LIMIT 1
       `, [userId, today, today]);
@@ -1137,16 +1137,16 @@ app.post('/api/ai/chat', [
       recentBMs = await db.all(`
         SELECT bristol_type as bristol_scale, time as timing, created_at as notes, date
         FROM bowel_movements 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
         ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
-        LIMIT 5
+        LIMIT 10
       `, [userId, today, today]);
       
       // Get recent symptoms (extended time range)
       recentSymptoms = await db.get(`
         SELECT bloating, abdominal_pain, date
         FROM symptoms 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
         ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
         LIMIT 1
       `, [userId, today, today]);
@@ -1155,10 +1155,18 @@ app.post('/api/ai/chat', [
       recentNotes = await db.all(`
         SELECT note, date
         FROM daily_notes 
-        WHERE user_id = ? AND (date = ? OR date >= date('now', '-14 days'))
+        WHERE user_id = ? AND (date = ? OR date >= date('now', '-30 days'))
         ORDER BY CASE WHEN date = ? THEN 0 ELSE 1 END, date DESC
-        LIMIT 5
+        LIMIT 10
       `, [userId, today, today]);
+
+      // Get ALL daily data for the past 30 days for analysis
+      allRecentData = await db.all(`
+        SELECT water_glasses, mood, stress_level, sleep_quality, date
+        FROM daily_data 
+        WHERE user_id = ? AND date >= date('now', '-30 days')
+        ORDER BY date DESC
+      `, [userId]);
       
     } catch (dbError) {
       console.log('=== DATABASE ERROR IN ASK AI ===');
@@ -1172,6 +1180,7 @@ app.post('/api/ai/chat', [
       recentBMs = [];
       recentSymptoms = {};
       recentNotes = [];
+      allRecentData = [];
     }
     
     // DEBUG: Log what data we actually found
@@ -1222,20 +1231,37 @@ app.post('/api/ai/chat', [
         `${note.date}: ${note.note}`
       ).join('\n') : 'No recent notes/remarks';
 
+    // Create data context summary
+    const dataAvailable = allRecentData?.length || 0;
+    const dateRange = dataAvailable > 0 ? 
+      `from ${allRecentData[allRecentData.length - 1]?.date} to ${allRecentData[0]?.date}` : 
+      'limited data available';
+    
+    // Calculate weekly averages if we have enough data
+    const weeklyStats = dataAvailable > 0 ? 
+      `Weekly averages (${dataAvailable} days): Water ${(allRecentData.reduce((sum, d) => sum + (d.water_glasses || 0), 0) / dataAvailable).toFixed(1)} glasses/day, Mood ${(allRecentData.filter(d => d.mood).reduce((sum, d) => sum + d.mood, 0) / allRecentData.filter(d => d.mood).length || 0).toFixed(1)}/5, Stress ${(allRecentData.filter(d => d.stress_level).reduce((sum, d) => sum + d.stress_level, 0) / allRecentData.filter(d => d.stress_level).length || 0).toFixed(1)}/10` :
+      'No weekly data available';
+
     const contextPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. You have access to their health tracking data.
 
-Health Data for ${recentData?.date || 'today'}:
+DATA CONTEXT: You have access to ${dataAvailable} days of data ${dateRange}. When asked about weekly, monthly, or trend analysis, use ALL available data to provide insights.
+
+LATEST DATA (${recentData?.date || 'today'}):
 - Water intake: ${recentData?.water_glasses || 0} glasses
 - Mood: ${recentData?.mood || 'Not recorded'}/5
 - Stress level: ${recentData?.stress_level || 'Not recorded'}/10
 - Sleep quality: ${recentData?.sleep_quality || 'Not recorded'}/5
 - Bowel movements: ${bmSummary}
 - Symptoms: Bloating ${recentSymptoms?.bloating || 0}/5, Abdominal pain ${recentSymptoms?.abdominal_pain || 0}/5
-- Notes: ${notesSummary}${chatHistoryContext}
+- Notes: ${notesSummary}
+
+ANALYSIS DATA: ${weeklyStats}
+
+ALL DAILY DATA (for analysis): ${allRecentData?.map(d => `${d.date}: ${d.water_glasses || 0} glasses, mood ${d.mood || 'N/A'}/5, stress ${d.stress_level || 'N/A'}/10`).join('; ') || 'No historical data'}${chatHistoryContext}
 
 User question: "${message}"
 
-Please answer their question using their specific data shown above. Be supportive and reference their actual numbers when relevant. Keep response to 2-3 sentences. Do not use markdown formatting like ** for bold text.`;
+INSTRUCTIONS: Use ALL available data above to answer questions. For weekly/monthly analysis, calculate from available data and mention the timeframe. Be analytical and helpful. Keep responses 2-3 sentences. No markdown formatting.`;
 
     // DEBUG: Log the actual prompt being sent to AI
     console.log('=== AI PROMPT DEBUG ===');
