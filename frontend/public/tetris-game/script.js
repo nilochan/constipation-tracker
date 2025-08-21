@@ -614,6 +614,9 @@ function restartGame() {
 function gameOver() {
     gameRunning = false;
     
+    // Save score to leaderboard
+    saveScore(score, lines, level);
+    
     // Show game over modal
     const modal = document.createElement('div');
     modal.className = 'game-over-modal';
@@ -655,6 +658,112 @@ function gameOver() {
     });
 }
 
+// Leaderboard functions
+async function saveScore(score, lines, level) {
+    try {
+        const user = window.parent.getCurrentUser ? window.parent.getCurrentUser() : null;
+        if (!user) {
+            console.log('No user logged in, score not saved');
+            return;
+        }
+
+        const token = window.parent.localStorage ? window.parent.localStorage.getItem('authToken') : localStorage.getItem('authToken');
+        const response = await fetch('/api/tetris/score', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                score: score,
+                lines: lines,
+                level: level
+            })
+        });
+
+        if (response.ok) {
+            console.log('Score saved successfully');
+        } else {
+            console.error('Failed to save score');
+        }
+    } catch (error) {
+        console.error('Error saving score:', error);
+    }
+}
+
+async function loadLeaderboard() {
+    try {
+        const token = window.parent.localStorage ? window.parent.localStorage.getItem('authToken') : localStorage.getItem('authToken');
+        const response = await fetch('/api/tetris/leaderboard', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const leaderboard = await response.json();
+            return leaderboard;
+        } else {
+            console.error('Failed to load leaderboard');
+            return [];
+        }
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        return [];
+    }
+}
+
+function showLeaderboard() {
+    const modal = document.getElementById('leaderboardModal');
+    modal.classList.remove('hidden');
+    loadLeaderboardContent();
+}
+
+function hideLeaderboard() {
+    const modal = document.getElementById('leaderboardModal');
+    modal.classList.add('hidden');
+}
+
+async function loadLeaderboardContent() {
+    const content = document.getElementById('leaderboardContent');
+    content.innerHTML = '<div style="text-align: center; padding: 20px;"><div>🐰</div><div>Loading scores...</div></div>';
+    
+    const leaderboard = await loadLeaderboard();
+    
+    if (leaderboard.length === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 20px; opacity: 0.7;">
+                <div style="font-size: 24px; margin-bottom: 10px;">🎮</div>
+                <div>No scores yet!</div>
+                <div style="font-size: 12px; margin-top: 5px;">Be the first to set a high score!</div>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div style="text-align: left;">';
+    leaderboard.forEach((entry, index) => {
+        const rank = index + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`;
+        const date = new Date(entry.created_at);
+        const sgTime = new Date(date.getTime() + (8 * 60 * 60 * 1000)); // Convert to Singapore time
+        
+        html += `
+            <div style="background: rgba(255,255,255,0.1); margin: 5px 0; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: bold;">${medal} ${entry.username}</div>
+                    <div style="font-size: 12px; opacity: 0.8;">Lines: ${entry.lines} | Level: ${entry.level}</div>
+                    <div style="font-size: 10px; opacity: 0.6;">${sgTime.toLocaleDateString()} ${sgTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                </div>
+                <div style="font-size: 18px; font-weight: bold; color: #ff6b9d;">${entry.score.toLocaleString()}</div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    content.innerHTML = html;
+}
+
 function setupControls() {
     // Keyboard controls
     document.addEventListener('keydown', (e) => {
@@ -691,6 +800,8 @@ function setupControls() {
     document.getElementById('startBtn').addEventListener('click', startGame);
     document.getElementById('pauseBtn').addEventListener('click', pauseGame);
     document.getElementById('restartBtn').addEventListener('click', restartGame);
+    document.getElementById('leaderboardBtn').addEventListener('click', showLeaderboard);
+    document.getElementById('closeLeaderboardBtn').addEventListener('click', hideLeaderboard);
 }
 
 // Add CSS for fade animation

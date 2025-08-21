@@ -1613,6 +1613,49 @@ app.get('/api/user/refresh', authenticateToken, async (req, res) => {
   }
 });
 
+// Tetris score API endpoints
+app.post('/api/tetris/score', authenticateToken, async (req, res) => {
+  try {
+    const { score, lines, level } = req.body;
+    const userId = req.user.userId;
+    const username = req.user.username;
+
+    if (!score || !lines || !level) {
+      return res.status(400).json({ error: 'Score, lines, and level are required' });
+    }
+
+    await db.run(
+      'INSERT INTO tetris_scores (user_id, username, score, lines, level) VALUES (?, ?, ?, ?, ?)',
+      [userId, username, score, lines, level]
+    );
+
+    res.json({ message: 'Score saved successfully' });
+  } catch (error) {
+    console.error('Save Tetris score error:', error);
+    res.status(500).json({ error: 'Failed to save score' });
+  }
+});
+
+app.get('/api/tetris/leaderboard', authenticateToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    
+    const leaderboard = await db.all(
+      `SELECT username, score, lines, level, created_at, 
+              ROW_NUMBER() OVER (ORDER BY score DESC, created_at ASC) as rank
+       FROM tetris_scores 
+       ORDER BY score DESC, created_at ASC 
+       LIMIT ?`,
+      [limit]
+    );
+
+    res.json(leaderboard);
+  } catch (error) {
+    console.error('Get Tetris leaderboard error:', error);
+    res.status(500).json({ error: 'Failed to get leaderboard' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });

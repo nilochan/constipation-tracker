@@ -180,6 +180,20 @@ class Database {
       )
     `);
 
+    // Tetris scores table for leaderboard
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tetris_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        score INTEGER NOT NULL,
+        lines INTEGER NOT NULL,
+        level INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+
     console.log('Database tables initialized');
   }
 

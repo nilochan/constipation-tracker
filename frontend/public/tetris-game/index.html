@@ -405,6 +405,7 @@
                     <button class="game-btn" id="startBtn">🎮 Start Game</button>
                     <button class="game-btn" id="pauseBtn">⏸️ Pause</button>
                     <button class="game-btn" id="restartBtn">🔄 Restart</button>
+                    <button class="game-btn" id="leaderboardBtn">🏆 Leaderboard</button>
                 </div>
 
                 <!-- Love Display -->
@@ -413,6 +414,18 @@
                     <div id="loveMessage" class="love-message"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Leaderboard Modal -->
+        <div id="leaderboardModal" class="game-over-modal hidden">
+            <div class="game-over-title">🏆 Leaderboard 🏆</div>
+            <div id="leaderboardContent" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                <div style="text-align: center; padding: 20px; opacity: 0.7;">
+                    <div>🐰</div>
+                    <div>Loading scores...</div>
+                </div>
+            </div>
+            <button class="modal-btn" id="closeLeaderboardBtn">Close</button>
         </div>
     </div>
 

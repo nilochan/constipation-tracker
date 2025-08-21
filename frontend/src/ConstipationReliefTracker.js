@@ -1403,7 +1403,7 @@ const ConstipationReliefTracker = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm">🤖</span>
+                    <span className="text-white text-sm">🐰</span>
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-800">AI Health Assistant</h3>
@@ -1871,7 +1871,7 @@ const ConstipationReliefTracker = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-lg">🤖</span>
+                    <span className="text-white text-lg">🐰</span>
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">AI Health Insights</h2>
@@ -2237,7 +2237,7 @@ const ConstipationReliefTracker = () => {
                 <div className="bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg p-6 text-white text-center">
                   <div className="text-4xl mb-3">🐰🐻🦆🐱🐧🐸🐹</div>
                   <h3 className="text-xl font-bold mb-2">Pinko's Tetris</h3>
-                  <p className="text-sm opacity-90 mb-4">Cony, Brown, Sally, Choco, James, Leonard & Boss love blocks! Stack with love! 💕</p>
+                  <p className="text-sm opacity-90 mb-4">Cony and Brown love blocks! Stack with love! 💕</p>
                   <button
                     onClick={() => setShowTetrisFullscreen(true)}
                     className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg px-4 py-2 text-sm transition-colors font-bold"
@@ -2610,7 +2610,7 @@ const ConstipationReliefTracker = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm">🤖</span>
+                    <span className="text-white text-sm">🐰</span>
                   </div>
                   <h2 className="text-xl font-bold text-gray-800">AI Health Assistant</h2>
                 </div>
@@ -2626,9 +2626,9 @@ const ConstipationReliefTracker = () => {
             <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-96">
               {chatMessages.length === 0 && (
                 <div className="text-center py-8">
-                  <div className="text-4xl mb-3">🤖</div>
+                  <div className="text-4xl mb-3">🐰</div>
                   <div className="text-gray-600 text-sm mb-2">Hi! I'm your AI health assistant.</div>
-                  <div className="text-gray-500 text-xs">Ask me about hydration, digestive health, or wellness tips!</div>
+                  <div className="text-gray-500 text-xs">Ask me about hydration, digestive health, wellness tips, or personal stats!!!!</div>
                 </div>
               )}
               
