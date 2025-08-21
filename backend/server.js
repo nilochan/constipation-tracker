@@ -1236,6 +1236,11 @@ User question: "${message}"
 
 Please answer their question using their specific data shown above. Be supportive and reference their actual numbers when relevant. Keep response to 2-3 sentences.`;
 
+    // DEBUG: Log the actual prompt being sent to AI
+    console.log('=== AI PROMPT DEBUG ===');
+    console.log('AI Prompt:', contextPrompt);
+    console.log('========================');
+
     const response = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
       messages: [{ role: 'user', content: contextPrompt }],
