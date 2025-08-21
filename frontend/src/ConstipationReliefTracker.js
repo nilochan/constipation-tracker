@@ -848,7 +848,7 @@ const ConstipationReliefTracker = () => {
       
       if (response.ok && data.users) {
         const userList = data.users.map(u => 
-          `${u.username} (Admin: ${u.is_admin ? 'Yes' : 'No'}) - Created: ${new Date(u.created_at).toLocaleDateString()}`
+          `${u.username} (Admin: ${u.is_admin ? 'Yes' : 'No'}) - Created: ${new Date(u.created_at).toLocaleDateString('en-US', { timeZone: 'Asia/Singapore' })}`
         ).join('\n');
         
         alert(`All Users in Database:\n\n${userList}\n\nCopy one of these usernames to use with admin promotion.`);
@@ -2176,10 +2176,11 @@ const ConstipationReliefTracker = () => {
                               })}
                             </span>
                             <span className="text-xs text-gray-500">
-                              {new Date(note.created_at).toLocaleString([], { 
+                              {new Date(note.created_at).toLocaleString('en-US', { 
                                 hour: '2-digit', 
                                 minute: '2-digit',
-                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                                hour12: true,
+                                timeZone: 'Asia/Singapore'
                               })}
                             </span>
                           </div>
@@ -2390,7 +2391,7 @@ const ConstipationReliefTracker = () => {
                   <h3 className="text-xl font-bold text-gray-800">{user?.username || 'User'}</h3>
                   <p className="text-gray-600">{user?.email || 'No email provided'}</p>
                   <div className="text-sm text-gray-500">
-                    Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Recently'}
+                    Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { timeZone: 'Asia/Singapore' }) : 'Recently'}
                   </div>
                 </div>
               </div>
@@ -2753,9 +2754,9 @@ const ConstipationReliefTracker = () => {
                           </div>
                           <div className="text-sm text-gray-600 space-y-1">
                             <p>📧 {user.email || 'No email'}</p>
-                            <p>📅 Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                            <p>📅 Joined: {new Date(user.created_at).toLocaleDateString('en-US', { timeZone: 'Asia/Singapore' })}</p>
                             <p>📊 {user.days_tracked} days tracked, {user.total_bowel_movements} BMs, {user.total_notes} notes</p>
-                            <p>🕒 Last active: {user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'Never'}</p>
+                            <p>🕒 Last active: {user.last_activity ? new Date(user.last_activity).toLocaleDateString('en-US', { timeZone: 'Asia/Singapore' }) : 'Never'}</p>
                           </div>
                         </div>
                       ))}
@@ -2777,7 +2778,7 @@ const ConstipationReliefTracker = () => {
                         <div key={log.id} className="bg-white rounded p-3 border text-xs">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium text-gray-800">{log.username}</span>
-                            <span className="text-gray-500">{new Date(log.created_at).toLocaleString()}</span>
+                            <span className="text-gray-500">{new Date(log.created_at).toLocaleString('en-US', { timeZone: 'Asia/Singapore', hour12: true })}</span>
                           </div>
                           <div className="text-gray-600">
                             <span className="font-medium text-blue-600">{log.action}</span>
