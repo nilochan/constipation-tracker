@@ -900,6 +900,6 @@ document.head.appendChild(style);
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
-    console.log('🎮 Tetris Game Loading - Version 2.3 (TRUST INITIAL DETECTION)');
+    console.log('🎮 Tetris Game Loading - Version 2.4 (RAILWAY DEBUGGING)');
     setTimeout(init, 1000); // Show loading animation for 1 second
 });
