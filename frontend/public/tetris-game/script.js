@@ -1,4 +1,4 @@
-// Pinko's Tetris Game with Cony & Brown Theme
+// Pinko's Tetris Game with Cony & Brown Theme - Version 2.3 DEPLOYED
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('nextCanvas');
