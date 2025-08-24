@@ -223,45 +223,43 @@ function clearLines() {
     let linesCleared = 0;
     let linesToClear = [];
     
-    // First pass: identify all complete lines
+    // First pass: identify all complete lines - fix the logic
     for (let y = 0; y < BOARD_HEIGHT; y++) {
         let fullLine = true;
-        let blocksInLine = 0;
         for (let x = 0; x < BOARD_WIDTH; x++) {
-            if (!board[y][x]) {
+            // More strict checking - ensure cell exists and is not empty (0 or null/undefined)
+            if (!board[y][x] || board[y][x] === 0) {
                 fullLine = false;
                 break;
-            } else {
-                blocksInLine++;
             }
         }
         if (fullLine) {
-            console.log(`Complete line found at row ${y} with ${blocksInLine}/${BOARD_WIDTH} blocks`);
+            console.log(`✅ Complete line confirmed at row ${y}`);
             linesToClear.push(y);
         }
     }
     
-    // Second pass: remove complete lines from bottom to top
+    // Immediately clear lines without animation delays
     if (linesToClear.length > 0) {
-        console.log(`Clearing ${linesToClear.length} lines:`, linesToClear);
-    }
-    
-    for (let i = linesToClear.length - 1; i >= 0; i--) {
-        const lineY = linesToClear[i];
+        console.log(`🧹 Clearing ${linesToClear.length} lines immediately:`, linesToClear);
         
-        // Visual feedback
-        animateLineClear(lineY);
+        // Sort lines from bottom to top for proper removal
+        linesToClear.sort((a, b) => b - a);
         
-        // Remove the complete line
-        board.splice(lineY, 1);
-        // Add new empty line at top
-        board.unshift(new Array(BOARD_WIDTH).fill(0));
+        // Remove complete lines immediately
+        for (const lineY of linesToClear) {
+            // Visual flash effect
+            flashLineClear(lineY);
+            
+            // Remove the complete line immediately
+            board.splice(lineY, 1);
+            // Add new empty line at top
+            board.unshift(new Array(BOARD_WIDTH).fill(0));
+            
+            linesCleared++;
+            console.log(`✅ Line ${lineY} cleared immediately`);
+        }
         
-        linesCleared++;
-        console.log(`Cleared line ${lineY}, total cleared: ${linesCleared}`);
-    }
-    
-    if (linesCleared > 0) {
         // Score calculation with Cony & Brown bonus
         const baseScore = [0, 100, 300, 500, 800][linesCleared];
         const bonusScore = baseScore * level;
@@ -274,35 +272,102 @@ function clearLines() {
             level = newLevel;
             // Standard Tetris speed progression: faster each level but not too extreme
             dropInterval = Math.max(50, Math.pow(0.8, level - 1) * 1000);
-            showTemporaryMessage(`🆙 Level ${level}! Speed increased! 🚀`, 2000);
+            showSmartMessage(`🆙 Level ${level}! Speed increased! 🚀`, 1500);
         }
         
         updateDisplay();
+        
+        // Smart celebration that doesn't block screen
+        celebrateSmartClear(linesCleared);
         checkLoveMilestone();
         
-        // Play celebration sound effect (visual feedback)
-        celebrateClear(linesCleared);
+        // Force redraw immediately
+        draw();
     }
 }
 
-function animateLineClear(lineY) {
-    // Visual feedback for line clearing
+function flashLineClear(lineY) {
+    // Quick flash effect for immediate feedback
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.fillRect(0, lineY * BLOCK_SIZE, canvas.width, BLOCK_SIZE);
     ctx.restore();
 }
 
-function celebrateClear(linesCleared) {
-    // Show celebration based on lines cleared
+// Smart message system - prevents screen blocking
+let activeMessages = [];
+let messageQueue = [];
+
+function showSmartMessage(message, duration = 1500) {
+    // Limit concurrent messages to prevent screen blocking
+    if (activeMessages.length >= 2) {
+        // Queue the message if too many are showing
+        messageQueue.push({ message, duration });
+        return;
+    }
+    
+    showMessageNow(message, duration);
+}
+
+function showMessageNow(message, duration) {
+    const msgDiv = document.createElement('div');
+    const messageId = Date.now() + Math.random();
+    
+    // Offset messages so they don't overlap
+    const offset = activeMessages.length * 60;
+    
+    msgDiv.style.cssText = `
+        position: fixed;
+        top: calc(40% + ${offset}px);
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 107, 157, 0.95);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 9999;
+        pointer-events: none;
+        animation: smartFadeInOut ${duration}ms ease-in-out;
+        text-align: center;
+        max-width: 70%;
+        line-height: 1.2;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    `;
+    msgDiv.textContent = message;
+    document.body.appendChild(msgDiv);
+    
+    // Track active message
+    activeMessages.push({ id: messageId, element: msgDiv });
+    
+    setTimeout(() => {
+        if (document.body.contains(msgDiv)) {
+            document.body.removeChild(msgDiv);
+        }
+        
+        // Remove from active messages
+        activeMessages = activeMessages.filter(msg => msg.id !== messageId);
+        
+        // Show next queued message
+        if (messageQueue.length > 0) {
+            const next = messageQueue.shift();
+            setTimeout(() => showMessageNow(next.message, next.duration), 200);
+        }
+    }, duration);
+}
+
+function celebrateSmartClear(linesCleared) {
+    // Smart celebration that doesn't block screen
     const celebrations = {
-        1: "🐰 Cony: Nice clear! 💕",
-        2: "🐻 Brown: Double clear! Amazing! 💝",
-        3: "🐰✨ Cony: Triple! You're on fire! 🔥",
-        4: "🐻🎉 Brown: TETRIS! Incredible! 👑"
+        1: "🐰 Nice clear! 💕",
+        2: "🐻 Double! Amazing! 💝", 
+        3: "🐰✨ Triple! On fire! 🔥",
+        4: "🐻🎉 TETRIS! Incredible! 👑"
     };
     
-    showTemporaryMessage(celebrations[linesCleared] || "Great job! 💕");
+    // Shorter duration for line clears to prevent blocking
+    showSmartMessage(celebrations[linesCleared] || "Great job! 💕", 1200);
 }
 
 function checkLoveMilestone() {
@@ -314,51 +379,27 @@ function checkLoveMilestone() {
 function showLoveMessage(milestone) {
     const message = LOVE_MESSAGES[milestone];
     
-    // Show love message as floating text instead of in sidebar
-    showTemporaryMessage(message, 4000); // Show for 4 seconds
+    // Use smart message system - shorter and less blocking
+    showSmartMessage(message, 2500); // Reduced from 4 seconds to 2.5 seconds
     
-    // Also show in love display panel without image
+    // Show in love display panel briefly without blocking gameplay
     const loveDisplay = document.getElementById('loveDisplay');
     const loveMessage = document.getElementById('loveMessage');
     
-    loveMessage.textContent = message;
-    loveDisplay.classList.remove('hidden');
-    
-    // Hide after 6 seconds
-    setTimeout(() => {
-        loveDisplay.classList.add('hidden');
-    }, 6000);
+    if (loveDisplay && loveMessage) {
+        loveMessage.textContent = message;
+        loveDisplay.classList.remove('hidden');
+        
+        // Hide sooner to not block screen
+        setTimeout(() => {
+            loveDisplay.classList.add('hidden');
+        }, 3500); // Reduced from 6 seconds to 3.5 seconds
+    }
 }
 
-function showTemporaryMessage(message, duration = 2000) {
-    // Create temporary floating message
-    const msgDiv = document.createElement('div');
-    msgDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(255, 107, 157, 0.9);
-        color: white;
-        padding: 15px 25px;
-        border-radius: 25px;
-        font-size: 16px;
-        font-weight: bold;
-        z-index: 9999;
-        pointer-events: none;
-        animation: fadeInOut ${duration}ms ease-in-out;
-        text-align: center;
-        max-width: 80%;
-        line-height: 1.3;
-    `;
-    msgDiv.textContent = message;
-    document.body.appendChild(msgDiv);
-    
-    setTimeout(() => {
-        if (document.body.contains(msgDiv)) {
-            document.body.removeChild(msgDiv);
-        }
-    }, duration);
+// Legacy function - redirect to smart message system
+function showTemporaryMessage(message, duration = 1500) {
+    showSmartMessage(message, duration);
 }
 
 function movePiece(dx, dy) {
@@ -561,7 +602,7 @@ function startGame() {
     document.getElementById('startBtn').textContent = '🎮 Running...';
     document.getElementById('pauseBtn').style.display = 'inline-block';
     
-    showTemporaryMessage("🐰💕 Cony & Brown: Let's play together! 🐻💖");
+    showSmartMessage("🐰💕 Let's play together! 🐻💖", 1500);
     
     requestAnimationFrame(gameLoop);
 }
@@ -573,9 +614,9 @@ function pauseGame() {
     document.getElementById('pauseBtn').textContent = gamePaused ? '▶️ Resume' : '⏸️ Pause';
     
     if (gamePaused) {
-        showTemporaryMessage("🐰😴 Game Paused - Take a break! 💤");
+        showSmartMessage("🐰😴 Game Paused 💤", 1200);
     } else {
-        showTemporaryMessage("🐻💪 Let's continue! 🎮");
+        showSmartMessage("🐻💪 Let's continue! 🎮", 1200);
     }
 }
 
@@ -608,7 +649,7 @@ function restartGame() {
     spawnNewPiece();
     draw();
     
-    showTemporaryMessage("🐰🔄 Fresh start! Ready for more love blocks? 💕");
+    showSmartMessage("🐰🔄 Fresh start! Ready? 💕", 1500);
 }
 
 function gameOver() {
@@ -804,7 +845,7 @@ function setupControls() {
     document.getElementById('closeLeaderboardBtn').addEventListener('click', hideLeaderboard);
 }
 
-// Add CSS for fade animation
+// Add CSS for animations
 const style = document.createElement('style');
 style.textContent = `
     @keyframes fadeInOut {
@@ -812,6 +853,13 @@ style.textContent = `
         20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
         80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    }
+    
+    @keyframes smartFadeInOut {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        15% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+        85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
     }
 `;
 document.head.appendChild(style);
