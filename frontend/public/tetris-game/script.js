@@ -233,66 +233,57 @@ function placePiece() {
 }
 
 function clearLines() {
+    console.log('🔍 ATOMIC LINE CLEARING - Version 2.5...');
+    
+    // ATOMIC APPROACH: Build completely new board without full lines
+    let newBoard = [];
     let linesCleared = 0;
-    let linesToClear = [];
+    let clearedRows = [];
     
-    console.log('🔍 Checking board for complete lines...');
-    
-    // First pass: identify all complete lines with bulletproof logic
+    // Process each row - keep incomplete rows, skip complete rows
     for (let y = 0; y < BOARD_HEIGHT; y++) {
-        let filledCells = 0;
-        let fullLine = true;
+        let isComplete = true;
+        let filledCount = 0;
         
+        // Check if this row is complete
         for (let x = 0; x < BOARD_WIDTH; x++) {
             if (board[y][x] && board[y][x] !== 0 && typeof board[y][x] === 'object') {
-                filledCells++;
+                filledCount++;
             } else {
-                fullLine = false;
+                isComplete = false;
                 break;
             }
         }
         
-        if (fullLine && filledCells === BOARD_WIDTH) {
-            console.log(`✅ FULL LINE DETECTED at row ${y} (${filledCells}/${BOARD_WIDTH} cells)`);
-            linesToClear.push(y);
-        } else if (filledCells > 0) {
-            console.log(`⚪ Row ${y}: ${filledCells}/${BOARD_WIDTH} cells filled`);
+        if (isComplete && filledCount === BOARD_WIDTH) {
+            // COMPLETE ROW - Don't add to new board (effectively removes it)
+            console.log(`🗑️ REMOVING complete row ${y} (${filledCount}/${BOARD_WIDTH} cells)`);
+            linesCleared++;
+            clearedRows.push(y);
+        } else {
+            // INCOMPLETE ROW - Keep it in new board
+            newBoard.push([...board[y]]); // Copy the row
+            if (filledCount > 0) {
+                console.log(`✅ KEEPING row ${y} (${filledCount}/${BOARD_WIDTH} cells)`);
+            }
         }
     }
     
-    // Immediately clear lines without animation delays
-    if (linesToClear.length > 0) {
-        console.log(`🧹 Clearing ${linesToClear.length} lines immediately:`, linesToClear);
+    // Add empty rows at the top to maintain board height
+    while (newBoard.length < BOARD_HEIGHT) {
+        newBoard.unshift(new Array(BOARD_WIDTH).fill(0));
+    }
+    
+    // Replace entire board atomically - ALL lines cleared at once!
+    if (linesCleared > 0) {
+        console.log(`🚨 ATOMIC REPLACEMENT: Cleared ${linesCleared} lines [${clearedRows.join(', ')}]`);
+        console.log(`📋 Old board height: ${board.length}, New board height: ${newBoard.length}`);
         
-        // Sort lines from bottom to top for proper removal (CRITICAL!)
-        linesToClear.sort((a, b) => b - a);
-        console.log(`📝 Sorted lines to clear (bottom to top):`, linesToClear);
+        // ATOMIC REPLACEMENT - no incremental changes
+        board = newBoard;
         
-        // Remove lines one by one, accounting for array shifting
-        // CRITICAL: No safety checks - trust the initial detection!
-        for (let i = 0; i < linesToClear.length; i++) {
-            const originalLineY = linesToClear[i];
-            // After removing previous lines, the current line shifts up by the number removed
-            const currentLineY = originalLineY - i;
-            
-            console.log(`🗑️ Removing line ${originalLineY} (now at index ${currentLineY}) from board...`);
-            console.log(`🔍 Board state before removal:`, board[currentLineY] ? `Row has ${board[currentLineY].filter(cell => cell && cell !== 0).length} filled cells` : 'Row not found');
-            
-            // Remove the line without verification (trust initial detection)
-            if (board[currentLineY]) {
-                board.splice(currentLineY, 1);
-                // Add new empty line at top
-                board.unshift(new Array(BOARD_WIDTH).fill(0));
-                
-                linesCleared++;
-                console.log(`✅ Line ${originalLineY} (index ${currentLineY}) removed successfully!`);
-            } else {
-                console.log(`❌ ERROR: Line ${currentLineY} doesn't exist!`);
-            }
-            
-            // Force immediate screen update after each line removal
-            draw();
-        }
+        // Force immediate visual update
+        draw();
         
         // Score calculation with Cony & Brown bonus
         const baseScore = [0, 100, 300, 500, 800][linesCleared];
@@ -315,8 +306,9 @@ function clearLines() {
         celebrateSmartClear(linesCleared);
         checkLoveMilestone();
         
-        // Force redraw immediately
-        draw();
+        console.log(`✅ ATOMIC CLEAR COMPLETE: ${linesCleared} lines removed in one operation!`);
+    } else {
+        console.log('⚪ No complete lines found');
     }
 }
 
@@ -900,6 +892,6 @@ document.head.appendChild(style);
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
-    console.log('🎮 Tetris Game Loading - Version 2.4 (RAILWAY DEBUGGING)');
+    console.log('🎮 Tetris Game Loading - Version 2.5 (ATOMIC CLEARING)');
     setTimeout(init, 1000); // Show loading animation for 1 second
 });
