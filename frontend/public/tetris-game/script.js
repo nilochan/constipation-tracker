@@ -264,23 +264,41 @@ function clearLines() {
     if (linesToClear.length > 0) {
         console.log(`🧹 Clearing ${linesToClear.length} lines immediately:`, linesToClear);
         
-        // Sort lines from bottom to top for proper removal
+        // Sort lines from bottom to top for proper removal (CRITICAL!)
         linesToClear.sort((a, b) => b - a);
+        console.log(`📝 Sorted lines to clear (bottom to top):`, linesToClear);
         
-        // Remove complete lines immediately with aggressive visual updates
-        for (const lineY of linesToClear) {
-            console.log(`🗑️ Removing line ${lineY} from board...`);
+        // Remove lines one by one, accounting for array shifting
+        for (let i = 0; i < linesToClear.length; i++) {
+            const originalLineY = linesToClear[i];
+            // After removing previous lines, the current line shifts up by the number removed
+            const currentLineY = originalLineY - i;
             
-            // Remove the complete line immediately
-            board.splice(lineY, 1);
-            // Add new empty line at top
-            board.unshift(new Array(BOARD_WIDTH).fill(0));
+            console.log(`🗑️ Removing line ${originalLineY} (now at index ${currentLineY}) from board...`);
+            
+            // Verify the line is still full before removing (safety check)
+            let stillFull = true;
+            for (let x = 0; x < BOARD_WIDTH; x++) {
+                if (!board[currentLineY][x] || board[currentLineY][x] === 0) {
+                    stillFull = false;
+                    break;
+                }
+            }
+            
+            if (stillFull) {
+                // Remove the complete line at current shifted position
+                board.splice(currentLineY, 1);
+                // Add new empty line at top
+                board.unshift(new Array(BOARD_WIDTH).fill(0));
+                
+                linesCleared++;
+                console.log(`✅ Line ${originalLineY} (index ${currentLineY}) cleared successfully!`);
+            } else {
+                console.log(`⚠️ Line ${originalLineY} (index ${currentLineY}) no longer full - skipping`);
+            }
             
             // Force immediate screen update after each line removal
             draw();
-            
-            linesCleared++;
-            console.log(`✅ Line ${lineY} cleared and screen updated`);
         }
         
         // Score calculation with Cony & Brown bonus
@@ -889,6 +907,6 @@ document.head.appendChild(style);
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
-    console.log('🎮 Tetris Game Loading - Version 2.1 (LINE CLEAR FIX)');
+    console.log('🎮 Tetris Game Loading - Version 2.2 (MULTI-LINE CLEAR FIX)');
     setTimeout(init, 1000); // Show loading animation for 1 second
 });
