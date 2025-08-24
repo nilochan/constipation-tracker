@@ -267,18 +267,20 @@ function clearLines() {
         // Sort lines from bottom to top for proper removal
         linesToClear.sort((a, b) => b - a);
         
-        // Remove complete lines immediately
+        // Remove complete lines immediately with aggressive visual updates
         for (const lineY of linesToClear) {
-            // Visual flash effect
-            flashLineClear(lineY);
+            console.log(`🗑️ Removing line ${lineY} from board...`);
             
             // Remove the complete line immediately
             board.splice(lineY, 1);
             // Add new empty line at top
             board.unshift(new Array(BOARD_WIDTH).fill(0));
             
+            // Force immediate screen update after each line removal
+            draw();
+            
             linesCleared++;
-            console.log(`✅ Line ${lineY} cleared immediately`);
+            console.log(`✅ Line ${lineY} cleared and screen updated`);
         }
         
         // Score calculation with Cony & Brown bonus
@@ -887,5 +889,6 @@ document.head.appendChild(style);
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
+    console.log('🎮 Tetris Game Loading - Version 2.1 (LINE CLEAR FIX)');
     setTimeout(init, 1000); // Show loading animation for 1 second
 });
