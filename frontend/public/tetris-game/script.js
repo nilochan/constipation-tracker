@@ -269,32 +269,25 @@ function clearLines() {
         console.log(`📝 Sorted lines to clear (bottom to top):`, linesToClear);
         
         // Remove lines one by one, accounting for array shifting
+        // CRITICAL: No safety checks - trust the initial detection!
         for (let i = 0; i < linesToClear.length; i++) {
             const originalLineY = linesToClear[i];
             // After removing previous lines, the current line shifts up by the number removed
             const currentLineY = originalLineY - i;
             
             console.log(`🗑️ Removing line ${originalLineY} (now at index ${currentLineY}) from board...`);
+            console.log(`🔍 Board state before removal:`, board[currentLineY] ? `Row has ${board[currentLineY].filter(cell => cell && cell !== 0).length} filled cells` : 'Row not found');
             
-            // Verify the line is still full before removing (safety check)
-            let stillFull = true;
-            for (let x = 0; x < BOARD_WIDTH; x++) {
-                if (!board[currentLineY][x] || board[currentLineY][x] === 0) {
-                    stillFull = false;
-                    break;
-                }
-            }
-            
-            if (stillFull) {
-                // Remove the complete line at current shifted position
+            // Remove the line without verification (trust initial detection)
+            if (board[currentLineY]) {
                 board.splice(currentLineY, 1);
                 // Add new empty line at top
                 board.unshift(new Array(BOARD_WIDTH).fill(0));
                 
                 linesCleared++;
-                console.log(`✅ Line ${originalLineY} (index ${currentLineY}) cleared successfully!`);
+                console.log(`✅ Line ${originalLineY} (index ${currentLineY}) removed successfully!`);
             } else {
-                console.log(`⚠️ Line ${originalLineY} (index ${currentLineY}) no longer full - skipping`);
+                console.log(`❌ ERROR: Line ${currentLineY} doesn't exist!`);
             }
             
             // Force immediate screen update after each line removal
@@ -907,6 +900,6 @@ document.head.appendChild(style);
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
-    console.log('🎮 Tetris Game Loading - Version 2.2 (MULTI-LINE CLEAR FIX)');
+    console.log('🎮 Tetris Game Loading - Version 2.3 (TRUST INITIAL DETECTION)');
     setTimeout(init, 1000); // Show loading animation for 1 second
 });
