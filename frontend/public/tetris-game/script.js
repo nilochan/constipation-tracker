@@ -200,6 +200,9 @@ function isCollision(piece, offsetX = 0, offsetY = 0) {
 }
 
 function placePiece() {
+    console.log('🔧 Placing piece and checking for line clears...');
+    
+    // Place the piece on the board
     for (let y = 0; y < currentPiece.shape.length; y++) {
         for (let x = 0; x < currentPiece.shape[y].length; x++) {
             if (currentPiece.shape[y][x]) {
@@ -215,7 +218,17 @@ function placePiece() {
         }
     }
     
+    // Force immediate redraw to show placed piece
+    draw();
+    
+    // Clear lines immediately after placing
+    console.log('🔧 Calling clearLines() immediately after piece placement...');
     clearLines();
+    
+    // Force another redraw after clearing
+    draw();
+    
+    // Then spawn new piece
     spawnNewPiece();
 }
 
@@ -223,19 +236,27 @@ function clearLines() {
     let linesCleared = 0;
     let linesToClear = [];
     
-    // First pass: identify all complete lines - fix the logic
+    console.log('🔍 Checking board for complete lines...');
+    
+    // First pass: identify all complete lines with bulletproof logic
     for (let y = 0; y < BOARD_HEIGHT; y++) {
+        let filledCells = 0;
         let fullLine = true;
+        
         for (let x = 0; x < BOARD_WIDTH; x++) {
-            // More strict checking - ensure cell exists and is not empty (0 or null/undefined)
-            if (!board[y][x] || board[y][x] === 0) {
+            if (board[y][x] && board[y][x] !== 0 && typeof board[y][x] === 'object') {
+                filledCells++;
+            } else {
                 fullLine = false;
                 break;
             }
         }
-        if (fullLine) {
-            console.log(`✅ Complete line confirmed at row ${y}`);
+        
+        if (fullLine && filledCells === BOARD_WIDTH) {
+            console.log(`✅ FULL LINE DETECTED at row ${y} (${filledCells}/${BOARD_WIDTH} cells)`);
             linesToClear.push(y);
+        } else if (filledCells > 0) {
+            console.log(`⚪ Row ${y}: ${filledCells}/${BOARD_WIDTH} cells filled`);
         }
     }
     
