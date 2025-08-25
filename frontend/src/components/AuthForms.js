@@ -142,8 +142,8 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
 
       const data = await response.json();
       if (response.ok) {
-        // Store token and redirect
-        localStorage.setItem('token', data.token);
+        // Store token and redirect - use 'authToken' to match ApiService
+        localStorage.setItem('authToken', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         window.location.reload();
       } else {
@@ -183,7 +183,8 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     if (token) {
-      localStorage.setItem('token', token);
+      // Store with 'authToken' key to match ApiService
+      localStorage.setItem('authToken', token);
       // Remove token from URL
       window.history.replaceState({}, document.title, window.location.pathname);
       window.location.reload();

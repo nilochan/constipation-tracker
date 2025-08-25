@@ -152,11 +152,27 @@ passport.use(new GoogleStrategy({
       if (email) {
         user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
         if (user) {
-          // Link Google account to existing user
-          await db.run(
-            'UPDATE users SET google_id = ?, auth_method = ? WHERE id = ?',
-            [profile.id, 'google', user.id]
-          );
+          // Link Google account to existing user (handle schema gracefully)
+          try {
+            await db.run(
+              'UPDATE users SET google_id = ?, auth_method = ? WHERE id = ?',
+              [profile.id, 'google', user.id]
+            );
+          } catch (error) {
+            if (error.message.includes('no such column')) {
+              // Old schema - just update google_id if column exists
+              try {
+                await db.run(
+                  'UPDATE users SET google_id = ? WHERE id = ?',
+                  [profile.id, user.id]
+                );
+              } catch (innerError) {
+                console.log('Cannot update google_id - old schema without multi-auth support');
+              }
+            } else {
+              throw error;
+            }
+          }
           user.google_id = profile.id;
           user.auth_method = 'google';
         }
@@ -168,10 +184,24 @@ passport.use(new GoogleStrategy({
       const username = profile.displayName?.replace(/\s+/g, '') || `google_user_${profile.id}`;
       const email = profile.emails?.[0]?.value;
       
-      const result = await db.run(
-        'INSERT INTO users (username, email, google_id, auth_method, is_admin) VALUES (?, ?, ?, ?, ?)',
-        [username, email, profile.id, 'google', false]
-      );
+      // Create new user (handle schema gracefully)
+      let result;
+      try {
+        result = await db.run(
+          'INSERT INTO users (username, email, google_id, auth_method, is_admin) VALUES (?, ?, ?, ?, ?)',
+          [username, email, profile.id, 'google', false]
+        );
+      } catch (error) {
+        if (error.message.includes('no such column')) {
+          // Fallback to old schema
+          result = await db.run(
+            'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
+            [username, email, false]
+          );
+        } else {
+          throw error;
+        }
+      }
       
       user = {
         id: result.id,
@@ -543,10 +573,24 @@ app.post('/api/auth/verify-email-otp', [
         return res.status(400).json({ error: 'Username already exists' });
       }
 
-      const result = await db.run(
-        'INSERT INTO users (username, email, auth_method, is_admin) VALUES (?, ?, ?, ?)',
-        [username, email, 'email', false]
-      );
+      // Try with new schema first, fallback to old schema
+      let result;
+      try {
+        result = await db.run(
+          'INSERT INTO users (username, email, auth_method, is_admin) VALUES (?, ?, ?, ?)',
+          [username, email, 'email', false]
+        );
+      } catch (error) {
+        if (error.message.includes('no such column: auth_method')) {
+          // Fallback to old schema without auth_method
+          result = await db.run(
+            'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
+            [username, email, false]
+          );
+        } else {
+          throw error;
+        }
+      }
 
       user = {
         id: result.id,
