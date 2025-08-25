@@ -11,6 +11,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const session = require('express-session');
+const twilio = require('twilio');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -97,6 +101,101 @@ app.use(express.static('../frontend/build'));
 // Serve uploaded files
 app.use('/uploads', express.static(uploadsDir));
 
+// Session configuration for Passport
+app.use(session({
+  secret: process.env.JWT_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // Set to true in production with HTTPS
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport serialization
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+});
+
+// Google OAuth Strategy
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "/api/auth/google/callback"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    console.log('Google OAuth profile:', {
+      id: profile.id,
+      email: profile.emails?.[0]?.value,
+      name: profile.displayName
+    });
+
+    // Check if user exists with this Google ID
+    let user = await db.get('SELECT * FROM users WHERE google_id = ?', [profile.id]);
+    
+    if (!user) {
+      // Check if user exists with this email
+      const email = profile.emails?.[0]?.value;
+      if (email) {
+        user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+        if (user) {
+          // Link Google account to existing user
+          await db.run(
+            'UPDATE users SET google_id = ?, auth_method = ? WHERE id = ?',
+            [profile.id, 'google', user.id]
+          );
+          user.google_id = profile.id;
+          user.auth_method = 'google';
+        }
+      }
+    }
+
+    if (!user) {
+      // Create new user
+      const username = profile.displayName?.replace(/\s+/g, '') || `google_user_${profile.id}`;
+      const email = profile.emails?.[0]?.value;
+      
+      const result = await db.run(
+        'INSERT INTO users (username, email, google_id, auth_method, is_admin) VALUES (?, ?, ?, ?, ?)',
+        [username, email, profile.id, 'google', false]
+      );
+      
+      user = {
+        id: result.id,
+        username,
+        email,
+        google_id: profile.id,
+        auth_method: 'google',
+        is_admin: false,
+        profile_photo: null
+      };
+
+      await logActivity(user.id, user.username, 'GOOGLE_REGISTER', 'Account created via Google OAuth');
+    } else {
+      await logActivity(user.id, user.username, 'GOOGLE_LOGIN', 'Logged in via Google OAuth');
+    }
+
+    return done(null, user);
+  } catch (error) {
+    console.error('Google OAuth error:', error);
+    return done(error, null);
+  }
+}));
+
+// Initialize Twilio client
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? 
+  twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -107,7 +206,7 @@ app.use(limiter);
 // Auth routes
 app.post('/api/register', [
   body('username').isLength({ min: 3 }).trim().escape(),
-  body('password').isLength({ min: 6 }),
+  body('password').optional().isLength({ min: 6 }),
   body('email').optional().isEmail().normalizeEmail()
 ], async (req, res) => {
   try {
@@ -124,13 +223,13 @@ app.post('/api/register', [
       return res.status(400).json({ error: 'Username already exists' });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password if provided
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
     // Create user (admin role can be granted later via admin button)
     const result = await db.run(
-      'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, ?)',
-      [username, hashedPassword, email, false]
+      'INSERT INTO users (username, password, email, is_admin, auth_method) VALUES (?, ?, ?, ?, ?)',
+      [username, hashedPassword, email, false, password ? 'password' : 'other']
     );
 
     // Generate token
@@ -172,6 +271,11 @@ app.post('/api/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check if user has a password (password-based auth)
+    if (!user.password) {
+      return res.status(401).json({ error: 'Please use Google or SMS authentication for this account' });
+    }
+
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -195,6 +299,205 @@ app.post('/api/login', [
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Google OAuth Routes
+app.get('/api/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  async (req, res) => {
+    try {
+      // Generate JWT token for consistency with existing auth
+      const user = req.user;
+      const token = jwt.sign(
+        { userId: user.id, username: user.username, isAdmin: user.is_admin },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Redirect to frontend with token
+      const redirectUrl = process.env.NODE_ENV === 'production' 
+        ? `/?token=${token}`
+        : `http://localhost:3000/?token=${token}`;
+      
+      res.redirect(redirectUrl);
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      res.redirect('/login?error=oauth_error');
+    }
+  }
+);
+
+// SMS OTP Routes
+app.post('/api/auth/send-otp', [
+  body('phone_number').isMobilePhone().withMessage('Valid phone number is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { phone_number } = req.body;
+
+    if (!twilioClient) {
+      return res.status(500).json({ error: 'SMS service not configured' });
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Clear existing OTPs for this phone number
+    await db.run('DELETE FROM sms_otp WHERE phone_number = ?', [phone_number]);
+
+    // Store OTP in database
+    await db.run(
+      'INSERT INTO sms_otp (phone_number, otp_code, expires_at) VALUES (?, ?, ?)',
+      [phone_number, otpCode, expiresAt.toISOString()]
+    );
+
+    // Send SMS via Twilio
+    try {
+      await twilioClient.messages.create({
+        body: `Your Constipation Tracker verification code is: ${otpCode}. This code expires in 5 minutes.`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phone_number
+      });
+
+      console.log(`OTP sent to ${phone_number}: ${otpCode}`);
+      
+      res.json({ message: 'OTP sent successfully' });
+    } catch (twilioError) {
+      console.error('Twilio error:', twilioError);
+      res.status(500).json({ error: 'Failed to send SMS. Please try again.' });
+    }
+
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/verify-otp', [
+  body('phone_number').isMobilePhone().withMessage('Valid phone number is required'),
+  body('otp_code').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+  body('username').optional().isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { phone_number, otp_code, username } = req.body;
+
+    // Get OTP record
+    const otpRecord = await db.get(
+      'SELECT * FROM sms_otp WHERE phone_number = ? AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
+      [phone_number]
+    );
+
+    if (!otpRecord) {
+      return res.status(400).json({ error: 'No valid OTP found for this phone number' });
+    }
+
+    // Check if OTP is expired
+    if (new Date() > new Date(otpRecord.expires_at)) {
+      return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Check attempts
+    if (otpRecord.attempts >= 3) {
+      return res.status(400).json({ error: 'Too many failed attempts. Please request a new OTP.' });
+    }
+
+    // Verify OTP
+    if (otpRecord.otp_code !== otp_code) {
+      // Increment attempts
+      await db.run(
+        'UPDATE sms_otp SET attempts = attempts + 1 WHERE id = ?',
+        [otpRecord.id]
+      );
+      return res.status(400).json({ error: 'Invalid OTP code' });
+    }
+
+    // Mark OTP as verified
+    await db.run(
+      'UPDATE sms_otp SET verified = TRUE WHERE id = ?',
+      [otpRecord.id]
+    );
+
+    // Check if user exists with this phone number
+    let user = await db.get('SELECT * FROM users WHERE phone_number = ?', [phone_number]);
+
+    if (!user) {
+      // Create new user if username provided
+      if (!username) {
+        return res.status(400).json({ error: 'Username is required for new accounts' });
+      }
+
+      // Check if username already exists
+      const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+
+      const result = await db.run(
+        'INSERT INTO users (username, phone_number, auth_method, phone_verified, is_admin) VALUES (?, ?, ?, ?, ?)',
+        [username, phone_number, 'phone', true, false]
+      );
+
+      user = {
+        id: result.id,
+        username,
+        phone_number,
+        auth_method: 'phone',
+        phone_verified: true,
+        is_admin: false,
+        email: null,
+        profile_photo: null
+      };
+
+      await logActivity(user.id, user.username, 'PHONE_REGISTER', 'Account created via SMS OTP');
+    } else {
+      // Update phone verification status
+      await db.run(
+        'UPDATE users SET phone_verified = TRUE WHERE id = ?',
+        [user.id]
+      );
+      user.phone_verified = true;
+
+      await logActivity(user.id, user.username, 'PHONE_LOGIN', 'Logged in via SMS OTP');
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, isAdmin: user.is_admin },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Phone verification successful',
+      token,
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email, 
+        phone_number: user.phone_number,
+        profile_photo: user.profile_photo, 
+        is_admin: user.is_admin 
+      }
+    });
+
+  } catch (error) {
+    console.error('Verify OTP error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

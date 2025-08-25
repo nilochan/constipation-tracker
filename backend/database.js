@@ -58,15 +58,32 @@ class Database {
       }
     });
     
-    // Users table
+    // Users table with multi-auth support
     this.db.run(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         email TEXT UNIQUE,
         profile_photo TEXT,
         is_admin BOOLEAN DEFAULT FALSE,
+        google_id TEXT UNIQUE,
+        phone_number TEXT UNIQUE,
+        auth_method TEXT DEFAULT 'password',
+        phone_verified BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // SMS OTP table for phone verification
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS sms_otp (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone_number TEXT NOT NULL,
+        otp_code TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        verified BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
