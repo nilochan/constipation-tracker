@@ -370,8 +370,11 @@ app.post('/api/auth/send-email-otp', [
       
       res.json({ 
         message: 'Verification code sent to your email',
-        // In development, include the OTP for easy testing
-        ...(process.env.NODE_ENV === 'development' && { otp: otpCode })
+        // In development/staging, include the OTP for easy testing
+        ...(process.env.NODE_ENV !== 'production' && { 
+          otp: otpCode,
+          debug: 'Check Railway logs or use the OTP shown above for testing'
+        })
       });
       
     } catch (emailError) {

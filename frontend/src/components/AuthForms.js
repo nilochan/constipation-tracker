@@ -102,6 +102,12 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
       if (response.ok) {
         setOtpSent(true);
         setErrors({});
+        // Show OTP code in development for easy testing
+        if (data.otp) {
+          setErrors({ 
+            general: `🔧 DEVELOPMENT MODE: Your OTP code is: ${data.otp}` 
+          });
+        }
       } else {
         setErrors({ email: data.error || 'Failed to send verification code' });
       }
