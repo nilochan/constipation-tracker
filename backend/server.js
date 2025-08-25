@@ -362,6 +362,9 @@ app.get('/api/auth/google/callback',
         redirectUrl = `http://localhost:3000/?token=${token}`;
       }
       
+      console.log(`🔑 Google OAuth redirect:`, redirectUrl);
+      console.log(`🌍 Environment: NODE_ENV=${process.env.NODE_ENV}, RAILWAY_ENVIRONMENT=${process.env.RAILWAY_ENVIRONMENT}`);
+      
       res.redirect(redirectUrl);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
@@ -525,8 +528,10 @@ app.post('/api/auth/verify-email-otp', [
 
     if (!user) {
       // Create new user if username provided
-      if (!username) {
-        return res.status(400).json({ error: 'Username is required for new accounts' });
+      if (!username || username.trim() === '') {
+        return res.status(400).json({ 
+          error: 'Username is required for new accounts. If you have an existing account, try the Password tab instead.' 
+        });
       }
 
       // Check if username already exists

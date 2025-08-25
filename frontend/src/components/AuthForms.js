@@ -284,7 +284,7 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
 
             {!otpSent ? (
               <>
-                {!isLoginMode && (
+                {!otpSent && !isLoginMode && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Username
@@ -306,6 +306,34 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                     {errors.username && (
                       <p className="text-red-500 text-sm mt-1">{errors.username}</p>
                     )}
+                  </div>
+                )}
+
+                {otpSent && !isLoginMode && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Username (for new account)
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input
+                        type="text"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleInputChange}
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          errors.username ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                        placeholder="Choose a username"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    {errors.username && (
+                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+                    )}
+                    <p className="text-sm text-gray-600 mt-1">
+                      Only needed if creating a new account. Leave blank if you have an existing account.
+                    </p>
                   </div>
                 )}
 
