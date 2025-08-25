@@ -15,6 +15,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
 const twilio = require('twilio');
+const nodemailer = require('nodemailer');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -198,6 +199,16 @@ passport.use(new GoogleStrategy({
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? 
   twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
 
+// Initialize Email transporter (using Gmail SMTP)
+const emailTransporter = process.env.EMAIL_USER && process.env.EMAIL_PASS ? 
+  nodemailer.createTransporter({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,    // Your Gmail address
+      pass: process.env.EMAIL_PASS     // Your Gmail app password
+    }
+  }) : null;
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -360,28 +371,73 @@ app.post('/api/auth/send-email-otp', [
       [email, otpCode, expiresAt.toISOString()]
     );
 
-    // Send email using a simple email service (we'll use a basic implementation)
-    // For production, you might want to use a service like SendGrid, Mailgun, etc.
+    // Send actual email
     try {
-      // Simple console log for development (you can replace this with actual email sending)
       console.log(`✅ Email OTP for ${email}: ${otpCode}`);
       console.log(`🕒 Expires at: ${expiresAt.toISOString()}`);
-      
-      // For now, we'll just log it. In production, you'd send an actual email
-      // await sendEmail(email, otpCode);
-      
-      res.json({ 
-        message: 'Verification code sent to your email',
-        // In development/staging, include the OTP for easy testing
-        ...(process.env.NODE_ENV !== 'production' && { 
+
+      // Send real email if email service is configured
+      if (emailTransporter) {
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: '🐰 Your Constipation Tracker Verification Code',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #10b981;">🐰 Constipation Tracker</h1>
+                <h2 style="color: #374151;">Verification Code</h2>
+              </div>
+              
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                <h1 style="color: #1f2937; font-size: 36px; letter-spacing: 8px; margin: 0;">${otpCode}</h1>
+                <p style="color: #6b7280; margin-top: 10px;">Your verification code</p>
+              </div>
+              
+              <div style="color: #374151; line-height: 1.6;">
+                <p>Hi there! 👋</p>
+                <p>You requested a verification code to sign in to your Constipation Tracker account.</p>
+                <p><strong>Your verification code is: ${otpCode}</strong></p>
+                <p>This code will expire in <strong>5 minutes</strong> for security reasons.</p>
+                <p>If you didn't request this code, you can safely ignore this email.</p>
+              </div>
+              
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+              <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+                This email was sent from your Constipation Tracker application.<br>
+                Please do not reply to this email.
+              </p>
+            </div>
+          `
+        };
+
+        await emailTransporter.sendMail(mailOptions);
+        console.log(`📧 Email sent successfully to ${email}`);
+        
+        res.json({ 
+          message: 'Verification code sent to your email',
+          // Still show OTP in development for backup testing
+          ...(process.env.NODE_ENV !== 'production' && { 
+            otp: otpCode,
+            debug: 'Email sent! Check your inbox and spam folder'
+          })
+        });
+      } else {
+        // Fallback to console logging if email not configured
+        console.log('⚠️  Email service not configured, using console logging');
+        res.json({ 
+          message: 'Email service not configured - check console logs',
           otp: otpCode,
-          debug: 'Check Railway logs or use the OTP shown above for testing'
-        })
-      });
+          debug: 'Configure EMAIL_USER and EMAIL_PASS environment variables for real email sending'
+        });
+      }
       
     } catch (emailError) {
       console.error('Email sending error:', emailError);
-      res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+      res.status(500).json({ 
+        error: 'Failed to send verification email. Please try again.',
+        debug: process.env.NODE_ENV !== 'production' ? emailError.message : undefined
+      });
     }
 
   } catch (error) {
