@@ -352,10 +352,15 @@ app.get('/api/auth/google/callback',
         { expiresIn: '7d' }
       );
 
-      // Redirect to frontend with token
-      const redirectUrl = process.env.NODE_ENV === 'production' 
-        ? `/?token=${token}`
-        : `http://localhost:3000/?token=${token}`;
+      // Redirect to frontend with token  
+      let redirectUrl;
+      if (process.env.NODE_ENV === 'production') {
+        redirectUrl = `https://chanchinthai.up.railway.app/?token=${token}`;
+      } else if (process.env.RAILWAY_ENVIRONMENT === 'staging') {
+        redirectUrl = `https://web-staging-87ce.up.railway.app/?token=${token}`;
+      } else {
+        redirectUrl = `http://localhost:3000/?token=${token}`;
+      }
       
       res.redirect(redirectUrl);
     } catch (error) {
@@ -430,8 +435,9 @@ app.post('/api/auth/send-email-otp', [
           `
         };
 
-        await emailTransporter.sendMail(mailOptions);
+        const result = await emailTransporter.sendMail(mailOptions);
         console.log(`📧 Email sent successfully to ${email}`);
+        console.log(`📧 Email result:`, result.messageId ? 'Message ID: ' + result.messageId : 'No message ID');
         
         res.json({ 
           message: 'Verification code sent to your email',
