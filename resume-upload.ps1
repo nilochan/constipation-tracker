@@ -2,9 +2,10 @@ Write-Host "Resume LINE Chat Upload (Starting from where we left off)" -Foregrou
 Write-Host "=======================================================" -ForegroundColor Green
 
 # Login first
+# Replace with your actual credentials
 $loginData = @{
-    username = "Nilo"
-    password = "Zxcvbnm1!"
+    username = "YOUR_USERNAME"
+    password = "YOUR_PASSWORD"
 } | ConvertTo-Json
 
 Write-Host "Logging in..." -ForegroundColor Yellow

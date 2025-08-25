@@ -1,9 +1,10 @@
 Write-Host "Database Debug - Check if chat_history table exists" -ForegroundColor Yellow
 
 # Login
+# Replace with your actual credentials
 $loginData = @{
-    username = "Nilo"
-    password = "Zxcvbnm1!"
+    username = "YOUR_USERNAME"
+    password = "YOUR_PASSWORD"
 } | ConvertTo-Json
 
 $loginResponse = Invoke-RestMethod -Uri "https://web-production-c744b.up.railway.app/api/login" -Method POST -Body $loginData -ContentType "application/json"
