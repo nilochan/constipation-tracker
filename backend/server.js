@@ -1276,10 +1276,17 @@ app.get('/api/admin/activity-logs', authenticateToken, requireAdmin, async (req,
       LIMIT ? OFFSET ?
     `, [parseInt(limit), parseInt(offset)]);
 
+    // Convert UTC timestamps to Singapore time (+8 hours)
+    const logsWithSingaporeTime = logs.map(log => ({
+      ...log,
+      created_at: new Date(new Date(log.created_at).getTime() + (8 * 60 * 60 * 1000)).toISOString().replace('T', ' ').substring(0, 19),
+      user_created_at: log.user_created_at ? new Date(new Date(log.user_created_at).getTime() + (8 * 60 * 60 * 1000)).toISOString().replace('T', ' ').substring(0, 19) : null
+    }));
+
     const totalCount = await db.get('SELECT COUNT(*) as count FROM activity_log');
     
     res.json({
-      logs,
+      logs: logsWithSingaporeTime,
       total: totalCount.count,
       limit: parseInt(limit),
       offset: parseInt(offset)
