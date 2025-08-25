@@ -132,9 +132,9 @@ passport.deserializeUser(async (id, done) => {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.NODE_ENV === 'production' 
-    ? "https://chanchinthai.up.railway.app/api/auth/google/callback"
-    : "https://web-staging-87ce.up.railway.app/api/auth/google/callback"
+  callbackURL: process.env.RAILWAY_SERVICE === 'constipation-tracker-staging'
+    ? "https://web-staging-87ce.up.railway.app/api/auth/google/callback"
+    : "https://chanchinthai.up.railway.app/api/auth/google/callback"
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     console.log('Google OAuth profile:', {
@@ -385,12 +385,18 @@ app.get('/api/auth/google/callback',
         { expiresIn: '7d' }
       );
 
-      // Redirect to frontend with token  
+      // Redirect to frontend with token - detect based on host  
       let redirectUrl;
-      if (process.env.NODE_ENV === 'production') {
+      const host = req.get('host') || 'localhost';
+      console.log('🌍 Request host:', host);
+      
+      if (host.includes('chanchinthai.up.railway.app')) {
         redirectUrl = `https://chanchinthai.up.railway.app/?token=${token}`;
-      } else if (process.env.RAILWAY_ENVIRONMENT === 'staging') {
+      } else if (host.includes('web-staging-87ce.up.railway.app')) {
         redirectUrl = `https://web-staging-87ce.up.railway.app/?token=${token}`;
+      } else if (host.includes('railway.app')) {
+        // Fallback for other Railway URLs - use the same host
+        redirectUrl = `https://${host}/?token=${token}`;
       } else {
         redirectUrl = `http://localhost:3000/?token=${token}`;
       }
@@ -559,11 +565,26 @@ app.post('/api/auth/verify-email-otp', [
     // Check if user exists with this email
     let user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
 
+    if (!user && username) {
+      // Check if user exists with provided username (link email to existing account)
+      user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+      if (user && !user.email) {
+        // Link email to existing account
+        try {
+          await db.run('UPDATE users SET email = ? WHERE id = ?', [email, user.id]);
+          user.email = email;
+          await logActivity(user.id, user.username, 'EMAIL_LINK', 'Email linked to existing account');
+        } catch (error) {
+          console.error('Failed to link email to existing account:', error);
+        }
+      }
+    }
+
     if (!user) {
       // Create new user if username provided
       if (!username || username.trim() === '') {
         return res.status(400).json({ 
-          error: 'Username is required for new accounts. If you have an existing account, try the Password tab instead.' 
+          error: 'To create a new account, enter a username. To link email to your existing account, enter your existing username.' 
         });
       }
 
