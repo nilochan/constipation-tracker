@@ -200,14 +200,33 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_T
   twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
 
 // Initialize Email transporter (using Gmail SMTP)
-const emailTransporter = process.env.EMAIL_USER && process.env.EMAIL_PASS ? 
-  nodemailer.createTransporter({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,    // Your Gmail address
-      pass: process.env.EMAIL_PASS     // Your Gmail app password
-    }
-  }) : null;
+let emailTransporter = null;
+try {
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    emailTransporter = nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,    // Your Gmail address
+        pass: process.env.EMAIL_PASS     // Your Gmail app password
+      }
+    });
+    console.log('📧 Email service configured with Gmail SMTP');
+    // Test email configuration (don't send, just verify)
+    emailTransporter.verify((error, success) => {
+      if (error) {
+        console.log('❌ Email configuration test failed:', error.message);
+        emailTransporter = null; // Disable email if config is bad
+      } else {
+        console.log('✅ Email service ready for sending');
+      }
+    });
+  } else {
+    console.log('⚠️  Email service not configured (EMAIL_USER/EMAIL_PASS missing)');
+  }
+} catch (emailConfigError) {
+  console.error('❌ Email configuration error:', emailConfigError.message);
+  emailTransporter = null;
+}
 
 // Rate limiting
 const limiter = rateLimit({
