@@ -344,6 +344,9 @@ app.get('/api/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login' }),
   async (req, res) => {
     try {
+      console.log('🔍 Google OAuth callback reached!');
+      console.log('🔍 User from OAuth:', req.user ? 'User found' : 'No user');
+      console.log('🔍 Session info:', req.session ? 'Session exists' : 'No session');
       // Generate JWT token for consistency with existing auth
       const user = req.user;
       const token = jwt.sign(
@@ -581,6 +584,16 @@ app.post('/api/auth/verify-email-otp', [
   } catch (error) {
     console.error('Verify Email OTP error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Debug endpoint to check user emails (temporary)
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await db.all('SELECT id, username, email, auth_method FROM users');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
