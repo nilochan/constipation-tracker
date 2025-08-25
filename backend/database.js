@@ -75,11 +75,11 @@ class Database {
       )
     `);
 
-    // SMS OTP table for phone verification
+    // Email OTP table for email verification (free alternative to SMS)
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS sms_otp (
+      CREATE TABLE IF NOT EXISTS email_otp (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone_number TEXT NOT NULL,
+        email TEXT NOT NULL,
         otp_code TEXT NOT NULL,
         expires_at DATETIME NOT NULL,
         attempts INTEGER DEFAULT 0,

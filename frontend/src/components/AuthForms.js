@@ -9,7 +9,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
     username: '',
     password: '',
     email: '',
-    phone_number: '',
     otp_code: ''
   });
   const [errors, setErrors] = useState({});
@@ -84,19 +83,19 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
     window.location.href = '/api/auth/google';
   };
 
-  // Handle SMS OTP
+  // Handle Email OTP
   const handleSendOtp = async () => {
-    if (!formData.phone_number) {
-      setErrors({ phone_number: 'Phone number is required' });
+    if (!formData.email) {
+      setErrors({ email: 'Email address is required' });
       return;
     }
 
     setOtpLoading(true);
     try {
-      const response = await fetch('/api/auth/send-otp', {
+      const response = await fetch('/api/auth/send-email-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: formData.phone_number })
+        body: JSON.stringify({ email: formData.email })
       });
 
       const data = await response.json();
@@ -104,10 +103,10 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
         setOtpSent(true);
         setErrors({});
       } else {
-        setErrors({ phone_number: data.error || 'Failed to send OTP' });
+        setErrors({ email: data.error || 'Failed to send verification code' });
       }
     } catch (error) {
-      setErrors({ phone_number: 'Network error. Please try again.' });
+      setErrors({ email: 'Network error. Please try again.' });
     } finally {
       setOtpLoading(false);
     }
@@ -125,11 +124,11 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
     }
 
     try {
-      const response = await fetch('/api/auth/verify-otp', {
+      const response = await fetch('/api/auth/verify-email-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone_number: formData.phone_number,
+          email: formData.email,
           otp_code: formData.otp_code,
           username: formData.username || undefined
         })
@@ -157,7 +156,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
       username: '',
       password: '',
       email: '',
-      phone_number: '',
       otp_code: ''
     });
   };
@@ -170,7 +168,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
       username: '',
       password: '',
       email: '',
-      phone_number: '',
       otp_code: ''
     });
   };
@@ -217,15 +214,15 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
               Password
             </button>
             <button
-              onClick={() => switchAuthMode('phone')}
+              onClick={() => switchAuthMode('email')}
               className={`pb-2 px-1 text-sm font-medium transition-colors ${
-                authMode === 'phone'
+                authMode === 'email'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Phone className="inline w-4 h-4 mr-1" />
-              SMS
+              <Mail className="inline w-4 h-4 mr-1" />
+              Email
             </button>
             <button
               onClick={() => switchAuthMode('google')}
@@ -270,8 +267,8 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
           </div>
         )}
 
-        {/* SMS OTP Authentication */}
-        {authMode === 'phone' && (
+        {/* Email OTP Authentication */}
+        {authMode === 'email' && (
           <div className="space-y-6">
             {errors.general && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -308,24 +305,24 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number
+                    Email Address
                   </label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                     <input
-                      type="tel"
-                      name="phone_number"
-                      value={formData.phone_number}
+                      type="email"
+                      name="email"
+                      value={formData.email}
                       onChange={handleInputChange}
                       className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        errors.phone_number ? 'border-red-300' : 'border-gray-300'
+                        errors.email ? 'border-red-300' : 'border-gray-300'
                       }`}
-                      placeholder="+1234567890"
+                      placeholder="your.email@example.com"
                       disabled={isLoading}
                     />
                   </div>
-                  {errors.phone_number && (
-                    <p className="text-red-500 text-sm mt-1">{errors.phone_number}</p>
+                  {errors.email && (
+                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
                   )}
                 </div>
 
@@ -334,14 +331,14 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                   disabled={otpLoading || isLoading}
                   className="w-full bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                 >
-                  {otpLoading ? 'Sending...' : 'Send Verification Code'}
+                  {otpLoading ? 'Sending...' : 'Send Email Code'}
                 </button>
               </>
             ) : (
               <>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <p className="text-green-600 text-sm">
-                    Verification code sent to {formData.phone_number}
+                    Verification code sent to {formData.email}
                   </p>
                 </div>
 

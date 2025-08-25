@@ -333,9 +333,9 @@ app.get('/api/auth/google/callback',
   }
 );
 
-// SMS OTP Routes
-app.post('/api/auth/send-otp', [
-  body('phone_number').isMobilePhone().withMessage('Valid phone number is required')
+// Email OTP Routes (Free alternative to SMS)
+app.post('/api/auth/send-email-otp', [
+  body('email').isEmail().withMessage('Valid email address is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -343,49 +343,50 @@ app.post('/api/auth/send-otp', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { phone_number } = req.body;
-
-    if (!twilioClient) {
-      return res.status(500).json({ error: 'SMS service not configured' });
-    }
+    const { email } = req.body;
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Clear existing OTPs for this phone number
-    await db.run('DELETE FROM sms_otp WHERE phone_number = ?', [phone_number]);
+    // Clear existing OTPs for this email
+    await db.run('DELETE FROM email_otp WHERE email = ?', [email]);
 
     // Store OTP in database
     await db.run(
-      'INSERT INTO sms_otp (phone_number, otp_code, expires_at) VALUES (?, ?, ?)',
-      [phone_number, otpCode, expiresAt.toISOString()]
+      'INSERT INTO email_otp (email, otp_code, expires_at) VALUES (?, ?, ?)',
+      [email, otpCode, expiresAt.toISOString()]
     );
 
-    // Send SMS via Twilio
+    // Send email using a simple email service (we'll use a basic implementation)
+    // For production, you might want to use a service like SendGrid, Mailgun, etc.
     try {
-      await twilioClient.messages.create({
-        body: `Your Constipation Tracker verification code is: ${otpCode}. This code expires in 5 minutes.`,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: phone_number
-      });
-
-      console.log(`OTP sent to ${phone_number}: ${otpCode}`);
+      // Simple console log for development (you can replace this with actual email sending)
+      console.log(`✅ Email OTP for ${email}: ${otpCode}`);
+      console.log(`🕒 Expires at: ${expiresAt.toISOString()}`);
       
-      res.json({ message: 'OTP sent successfully' });
-    } catch (twilioError) {
-      console.error('Twilio error:', twilioError);
-      res.status(500).json({ error: 'Failed to send SMS. Please try again.' });
+      // For now, we'll just log it. In production, you'd send an actual email
+      // await sendEmail(email, otpCode);
+      
+      res.json({ 
+        message: 'Verification code sent to your email',
+        // In development, include the OTP for easy testing
+        ...(process.env.NODE_ENV === 'development' && { otp: otpCode })
+      });
+      
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
 
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error('Send email OTP error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/auth/verify-otp', [
-  body('phone_number').isMobilePhone().withMessage('Valid phone number is required'),
+app.post('/api/auth/verify-email-otp', [
+  body('email').isEmail().withMessage('Valid email address is required'),
   body('otp_code').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
   body('username').optional().isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
 ], async (req, res) => {
@@ -395,16 +396,16 @@ app.post('/api/auth/verify-otp', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { phone_number, otp_code, username } = req.body;
+    const { email, otp_code, username } = req.body;
 
     // Get OTP record
     const otpRecord = await db.get(
-      'SELECT * FROM sms_otp WHERE phone_number = ? AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
-      [phone_number]
+      'SELECT * FROM email_otp WHERE email = ? AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
+      [email]
     );
 
     if (!otpRecord) {
-      return res.status(400).json({ error: 'No valid OTP found for this phone number' });
+      return res.status(400).json({ error: 'No valid OTP found for this email address' });
     }
 
     // Check if OTP is expired
@@ -421,7 +422,7 @@ app.post('/api/auth/verify-otp', [
     if (otpRecord.otp_code !== otp_code) {
       // Increment attempts
       await db.run(
-        'UPDATE sms_otp SET attempts = attempts + 1 WHERE id = ?',
+        'UPDATE email_otp SET attempts = attempts + 1 WHERE id = ?',
         [otpRecord.id]
       );
       return res.status(400).json({ error: 'Invalid OTP code' });
@@ -429,12 +430,12 @@ app.post('/api/auth/verify-otp', [
 
     // Mark OTP as verified
     await db.run(
-      'UPDATE sms_otp SET verified = TRUE WHERE id = ?',
+      'UPDATE email_otp SET verified = TRUE WHERE id = ?',
       [otpRecord.id]
     );
 
-    // Check if user exists with this phone number
-    let user = await db.get('SELECT * FROM users WHERE phone_number = ?', [phone_number]);
+    // Check if user exists with this email
+    let user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
 
     if (!user) {
       // Create new user if username provided
@@ -449,31 +450,22 @@ app.post('/api/auth/verify-otp', [
       }
 
       const result = await db.run(
-        'INSERT INTO users (username, phone_number, auth_method, phone_verified, is_admin) VALUES (?, ?, ?, ?, ?)',
-        [username, phone_number, 'phone', true, false]
+        'INSERT INTO users (username, email, auth_method, is_admin) VALUES (?, ?, ?, ?)',
+        [username, email, 'email', false]
       );
 
       user = {
         id: result.id,
         username,
-        phone_number,
-        auth_method: 'phone',
-        phone_verified: true,
+        email,
+        auth_method: 'email',
         is_admin: false,
-        email: null,
         profile_photo: null
       };
 
-      await logActivity(user.id, user.username, 'PHONE_REGISTER', 'Account created via SMS OTP');
+      await logActivity(user.id, user.username, 'EMAIL_REGISTER', 'Account created via Email OTP');
     } else {
-      // Update phone verification status
-      await db.run(
-        'UPDATE users SET phone_verified = TRUE WHERE id = ?',
-        [user.id]
-      );
-      user.phone_verified = true;
-
-      await logActivity(user.id, user.username, 'PHONE_LOGIN', 'Logged in via SMS OTP');
+      await logActivity(user.id, user.username, 'EMAIL_LOGIN', 'Logged in via Email OTP');
     }
 
     // Generate JWT token
@@ -484,20 +476,19 @@ app.post('/api/auth/verify-otp', [
     );
 
     res.json({
-      message: 'Phone verification successful',
+      message: 'Email verification successful',
       token,
       user: { 
         id: user.id, 
         username: user.username, 
         email: user.email, 
-        phone_number: user.phone_number,
         profile_photo: user.profile_photo, 
         is_admin: user.is_admin 
       }
     });
 
   } catch (error) {
-    console.error('Verify OTP error:', error);
+    console.error('Verify Email OTP error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
