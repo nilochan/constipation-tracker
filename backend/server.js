@@ -1832,10 +1832,6 @@ Instructions:
 
     console.log('🚀 Calling DeepSeek API for personalized response...');
     
-    // Adjust max_tokens based on question type
-    const maxTokens = isHealthRelated ? 300 : 800;
-    console.log('📝 Using max_tokens:', maxTokens, 'for', isHealthRelated ? 'health' : 'general', 'question');
-    
     const deepseekResponse = await axios.post(DEEPSEEK_API_URL, {
       model: 'deepseek-chat',
       messages: [
@@ -1844,14 +1840,14 @@ Instructions:
           content: personalizedPrompt
         }
       ],
-      max_tokens: maxTokens,
+      max_tokens: isHealthRelated ? 300 : 500,
       temperature: 0.7
     }, {
       headers: {
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      timeout: 15000  // Increased from 10s to 15s
+      timeout: 10000
     });
 
     const aiResponse = deepseekResponse.data.choices[0].message.content;
@@ -1866,33 +1862,30 @@ Instructions:
 
   } catch (error) {
     console.error('ASK AI error:', error);
-    console.log('🔄 Using fallback response for question type:', isHealthRelated ? 'Health-related' : 'General knowledge');
+    console.log('🔄 Question type was:', isHealthRelated ? 'Health-related' : 'General knowledge');
     
-    // Smart fallback based on question type
-    let fallbackResponse;
-    
-    if (error.code === 'ECONNABORTED' || error.code === 'ECONNRESET' || error.message.includes('timeout') || error.message.includes('aborted')) {
-      if (isHealthRelated) {
-        fallbackResponse = `Hi ${user?.username || 'there'}! I'm having trouble connecting to the AI service right now, but I'd love to help with your health question. Please try asking again in a moment! For urgent concerns, please consult your doctor. 🤖💙`;
-      } else {
-        fallbackResponse = `Hi ${user?.username || 'there'}! I'm having trouble connecting to get you detailed information about "${message}" right now. Please try again in a moment - I'll be able to give you a comprehensive answer then! 🤖`;
-      }
-    } else if (error.response?.status === 429) {
-      fallbackResponse = "I'm getting too many requests right now. Please wait a moment and try again! ⏰";
-    } else {
-      // General error fallback
-      if (isHealthRelated) {
-        fallbackResponse = `Hi ${user?.username || 'there'}! I'm here to help with your health questions. For your question about "${message}", please try again in a moment. For medical concerns, always consult your doctor. 💙`;
-      } else {
-        fallbackResponse = `Hi ${user?.username || 'there'}! I'd love to help answer "${message}" but I'm having technical difficulties right now. Please try again in a moment for a detailed response! 🤖`;
-      }
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.json({
+        response: "I'm having trouble connecting right now. Please try again in a moment! 🤖",
+        timestamp: new Date().toISOString()
+      });
     }
+
+    if (error.response?.status === 429) {
+      return res.json({
+        response: "I'm getting too many requests right now. Please wait a moment and try again! ⏰",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Simple fallback based on question type
+    const fallbackResponse = isHealthRelated 
+      ? "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙"
+      : `Hi ${user?.username || 'there'}! I'm having trouble responding right now. Please try again later! 💙`;
 
     res.json({
       response: fallbackResponse,
-      timestamp: new Date().toISOString(),
-      isTemporaryError: true,
-      questionType: isHealthRelated ? 'health' : 'general'
+      timestamp: new Date().toISOString()
     });
   }
 });
