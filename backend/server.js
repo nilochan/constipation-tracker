@@ -565,33 +565,19 @@ app.post('/api/auth/verify-email-otp', [
     // Check if user exists with this email
     let user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
 
-    if (!user && username) {
-      // Check if user exists with provided username (link email to existing account)
-      user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
-      if (user && !user.email) {
-        // Link email to existing account
-        try {
-          await db.run('UPDATE users SET email = ? WHERE id = ?', [email, user.id]);
-          user.email = email;
-          await logActivity(user.id, user.username, 'EMAIL_LINK', 'Email linked to existing account');
-        } catch (error) {
-          console.error('Failed to link email to existing account:', error);
-        }
-      }
-    }
-
     if (!user) {
-      // Create new user if username provided
+      // No user found with this email
       if (!username || username.trim() === '') {
         return res.status(400).json({ 
-          error: 'To create a new account, enter a username. To link email to your existing account, enter your existing username.' 
+          error: 'No account found with this email. Please use the Sign Up mode to create a new account.',
+          requireSignUp: true
         });
       }
 
-      // Check if username already exists
+      // Create new user (sign up mode)
       const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
       if (existingUser) {
-        return res.status(400).json({ error: 'Username already exists' });
+        return res.status(400).json({ error: 'Username already exists. Please choose a different username.' });
       }
 
       // Try with new schema first, fallback to old schema
@@ -624,6 +610,7 @@ app.post('/api/auth/verify-email-otp', [
 
       await logActivity(user.id, user.username, 'EMAIL_REGISTER', 'Account created via Email OTP');
     } else {
+      // Existing user login - no username required
       await logActivity(user.id, user.username, 'EMAIL_LOGIN', 'Logged in via Email OTP');
     }
 
