@@ -601,12 +601,21 @@ app.post('/api/auth/verify-email-otp', [
             console.log('✅ Fallback with is_admin successful');
           } catch (fallbackError) {
             console.log('🔧 Further fallback needed:', fallbackError.message);
-            // Even more basic schema
-            result = await db.run(
-              'INSERT INTO users (username, email) VALUES (?, ?)',
-              [username, normalizedEmail]
-            );
-            console.log('✅ Basic fallback successful');
+            // Legacy schema with required password column
+            if (fallbackError.message.includes('NOT NULL constraint failed: users.password')) {
+              result = await db.run(
+                'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+                [username, normalizedEmail, 'email_auth'] // Placeholder password for email auth
+              );
+              console.log('✅ Legacy schema with password fallback successful');
+            } else {
+              // Even more basic schema
+              result = await db.run(
+                'INSERT INTO users (username, email) VALUES (?, ?)',
+                [username, normalizedEmail]
+              );
+              console.log('✅ Basic fallback successful');
+            }
           }
         } else {
           throw error;
