@@ -1266,8 +1266,21 @@ Instructions:
 
   } catch (error) {
     console.error('ASK AI error:', error);
+    console.log('🔍 Error details:', {
+      code: error.code,
+      message: error.message,
+      aborted: error.response?.req?.aborted,
+      status: error.response?.status
+    });
     
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    // Check for connection issues (including aborted connections)
+    if (error.code === 'ECONNABORTED' || 
+        error.code === 'ECONNRESET' ||
+        error.message.includes('timeout') || 
+        error.message.includes('aborted') ||
+        error.response?.req?.aborted) {
+      
+      console.log('🔄 Connection issue detected, using fallback');
       return res.json({
         response: "I'm having trouble connecting to the AI service right now. Please try again in a moment! 🤖",
         timestamp: new Date().toISOString()
@@ -1281,9 +1294,15 @@ Instructions:
       });
     }
 
-    // Fallback response
+    // Enhanced fallback based on detected question type
+    console.log('🔄 Using enhanced fallback for question type:', isHealthRelated ? 'Health-related' : 'General knowledge');
+    
+    const fallbackResponse = isHealthRelated 
+      ? "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙"
+      : `Hi ${user?.username || 'there'}! I'm having trouble getting detailed information right now, but I'd love to help answer your question about "${message}". Please try again in a moment! 🤖`;
+
     res.json({
-      response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
+      response: fallbackResponse,
       timestamp: new Date().toISOString()
     });
   }
