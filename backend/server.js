@@ -321,10 +321,44 @@ app.post('/api/register', [
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
     // Create user (admin role can be granted later via admin button)
-    const result = await db.run(
-      'INSERT INTO users (username, password, email, is_admin, auth_method) VALUES (?, ?, ?, ?, ?)',
-      [username, hashedPassword, email, false, password ? 'password' : 'other']
-    );
+    let result;
+    try {
+      result = await db.run(
+        'INSERT INTO users (username, password, email, is_admin, auth_method) VALUES (?, ?, ?, ?, ?)',
+        [username, hashedPassword, email, false, password ? 'password' : 'other']
+      );
+    } catch (error) {
+      console.log('🔧 Password registration schema error, trying fallback:', error.message);
+      if (error.message.includes('no such column') || error.message.includes('auth_method')) {
+        // Try basic schema - might not have is_admin either
+        try {
+          result = await db.run(
+            'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, ?)',
+            [username, hashedPassword, email, false]
+          );
+          console.log('✅ Password registration fallback with is_admin successful');
+        } catch (fallbackError) {
+          console.log('🔧 Further password fallback needed:', fallbackError.message);
+          if (fallbackError.message.includes('NOT NULL constraint failed: users.password')) {
+            // This shouldn't happen for password registration, but just in case
+            result = await db.run(
+              'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+              [username, email, hashedPassword || 'password_auth']
+            );
+            console.log('✅ Basic password fallback successful');
+          } else {
+            // Most basic schema
+            result = await db.run(
+              'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
+              [username, hashedPassword, email]
+            );
+            console.log('✅ Most basic password fallback successful');
+          }
+        }
+      } else {
+        throw error;
+      }
+    }
 
     // Generate token
     const token = jwt.sign(
