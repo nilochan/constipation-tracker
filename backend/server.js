@@ -508,6 +508,21 @@ app.post('/api/auth/send-email-otp', [
         needsSignup: true
       });
     }
+    
+    // For signup mode, also check username uniqueness if provided
+    if (mode === 'signup' && req.body.username) {
+      const username = req.body.username.trim();
+      console.log(`🔍 Send OTP: Checking username uniqueness for signup: "${username}"`);
+      const existingUsernameUser = await db.get('SELECT id, username FROM users WHERE username = ?', [username]);
+      if (existingUsernameUser) {
+        console.log(`🚫 Send OTP: Blocking duplicate username: "${username}" (ID: ${existingUsernameUser.id})`);
+        return res.status(400).json({ 
+          error: 'Username already exists. Please choose a different username.',
+          duplicateUsername: true
+        });
+      }
+      console.log(`✅ Send OTP: Username "${username}" is available`);
+    }
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();

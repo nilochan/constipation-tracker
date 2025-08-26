@@ -103,7 +103,8 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email: formData.email,
-          mode: isLoginMode ? 'signin' : 'signup'
+          mode: isLoginMode ? 'signin' : 'signup',
+          username: !isLoginMode ? formData.username : undefined
         })
       });
 
@@ -126,6 +127,9 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
           // Switch to sign up mode if no account found
           setIsLoginMode(false);
           setErrors({ general: data.error });
+        } else if (data.duplicateUsername) {
+          // Username already exists during signup
+          setErrors({ username: data.error });
         } else {
           setErrors({ email: data.error || 'Failed to send verification code' });
         }
@@ -388,30 +392,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                   )}
                 </div>
 
-                {!isLoginMode && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Username *
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                      <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.username ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="Choose a unique username (required for signup)"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    {errors.username && (
-                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
-                    )}
-                  </div>
-                )}
 
                 <button
                   onClick={handleSendOtp}
