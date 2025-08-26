@@ -590,12 +590,24 @@ app.post('/api/auth/verify-email-otp', [
           [username, normalizedEmail, 'email', false]
         );
       } catch (error) {
-        if (error.message.includes('no such column: auth_method')) {
-          // Fallback to old schema without auth_method
-          result = await db.run(
-            'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
-            [username, normalizedEmail, false]
-          );
+        console.log('🔧 Schema error, trying fallback:', error.message);
+        if (error.message.includes('no such column') || error.message.includes('auth_method')) {
+          // Try basic schema - might not have is_admin either
+          try {
+            result = await db.run(
+              'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
+              [username, normalizedEmail, false]
+            );
+            console.log('✅ Fallback with is_admin successful');
+          } catch (fallbackError) {
+            console.log('🔧 Further fallback needed:', fallbackError.message);
+            // Even more basic schema
+            result = await db.run(
+              'INSERT INTO users (username, email) VALUES (?, ?)',
+              [username, normalizedEmail]
+            );
+            console.log('✅ Basic fallback successful');
+          }
         } else {
           throw error;
         }
