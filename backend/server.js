@@ -423,30 +423,31 @@ app.post('/api/auth/send-email-otp', [
     }
 
     const { email } = req.body;
+    const normalizedEmail = email.toLowerCase().trim(); // Normalize email
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Clear existing OTPs for this email
-    await db.run('DELETE FROM email_otp WHERE email = ?', [email]);
+    await db.run('DELETE FROM email_otp WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
 
     // Store OTP in database
     await db.run(
       'INSERT INTO email_otp (email, otp_code, expires_at) VALUES (?, ?, ?)',
-      [email, otpCode, expiresAt.toISOString()]
+      [normalizedEmail, otpCode, expiresAt.toISOString()]
     );
 
     // Send actual email
     try {
-      console.log(`✅ Email OTP for ${email}: ${otpCode}`);
+      console.log(`✅ Email OTP for ${normalizedEmail}: ${otpCode}`);
       console.log(`🕒 Expires at: ${expiresAt.toISOString()}`);
 
       // Send real email if email service is configured
       if (emailTransporter) {
         const mailOptions = {
           from: process.env.EMAIL_USER,
-          to: email,
+          to: normalizedEmail,
           subject: '🐰 Your Constipation Tracker Verification Code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -525,11 +526,12 @@ app.post('/api/auth/verify-email-otp', [
     }
 
     const { email, otp_code, username } = req.body;
+    const normalizedEmail = email.toLowerCase().trim(); // Normalize email
 
-    // Get OTP record
+    // Get OTP record (case-insensitive email)
     const otpRecord = await db.get(
-      'SELECT * FROM email_otp WHERE email = ? AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
-      [email]
+      'SELECT * FROM email_otp WHERE LOWER(email) = LOWER(?) AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
+      [normalizedEmail]
     );
 
     if (!otpRecord) {
@@ -562,8 +564,8 @@ app.post('/api/auth/verify-email-otp', [
       [otpRecord.id]
     );
 
-    // Check if user exists with this email
-    let user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    // Check if user exists with this email (case-insensitive)
+    let user = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
 
     if (!user) {
       // No user found with this email
@@ -585,14 +587,14 @@ app.post('/api/auth/verify-email-otp', [
       try {
         result = await db.run(
           'INSERT INTO users (username, email, auth_method, is_admin) VALUES (?, ?, ?, ?)',
-          [username, email, 'email', false]
+          [username, normalizedEmail, 'email', false]
         );
       } catch (error) {
         if (error.message.includes('no such column: auth_method')) {
           // Fallback to old schema without auth_method
           result = await db.run(
             'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
-            [username, email, false]
+            [username, normalizedEmail, false]
           );
         } else {
           throw error;
@@ -602,7 +604,7 @@ app.post('/api/auth/verify-email-otp', [
       user = {
         id: result.id,
         username,
-        email,
+        email: normalizedEmail,
         auth_method: 'email',
         is_admin: false,
         profile_photo: null

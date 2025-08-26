@@ -90,11 +90,7 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
       return;
     }
 
-    if (!isLoginMode && !formData.username) {
-      setErrors({ username: 'Username is required to create a new account' });
-      return;
-    }
-
+    // Username will be required in verification step for signup mode
     setOtpLoading(true);
     try {
       const response = await fetch('/api/auth/send-email-otp', {
@@ -374,30 +370,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                   )}
                 </div>
 
-                {!isLoginMode && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Username
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                      <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.username ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="Choose a unique username"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    {errors.username && (
-                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
-                    )}
-                  </div>
-                )}
 
                 <button
                   onClick={handleSendOtp}
