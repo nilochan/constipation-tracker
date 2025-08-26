@@ -11,11 +11,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const session = require('express-session');
-const twilio = require('twilio');
-const nodemailer = require('nodemailer');
 
 const db = require('./database');
 const { authenticateToken } = require('./middleware/auth');
@@ -26,25 +21,6 @@ const requireAdmin = (req, res, next) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
-};
-
-// Global username uniqueness checker
-const ensureUsernameUnique = async (desiredUsername) => {
-  let username = desiredUsername;
-  let counter = 1;
-  let existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
-  
-  while (existingUser) {
-    username = `${desiredUsername}${counter}`;
-    counter++;
-    existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
-    if (counter > 100) { // Prevent infinite loop
-      username = `${desiredUsername}_${Date.now()}`;
-      break;
-    }
-  }
-  
-  return username;
 };
 
 // Activity logging function
@@ -121,168 +97,6 @@ app.use(express.static('../frontend/build'));
 // Serve uploaded files
 app.use('/uploads', express.static(uploadsDir));
 
-// Session configuration for Passport
-app.use(session({
-  secret: process.env.JWT_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false } // Set to true in production with HTTPS
-}));
-
-// Initialize Passport
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Passport serialization
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await db.get('SELECT * FROM users WHERE id = ?', [id]);
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-});
-
-// Google OAuth Strategy
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.RAILWAY_SERVICE === 'constipation-tracker-staging'
-    ? "https://web-staging-87ce.up.railway.app/api/auth/google/callback"
-    : "https://chanchinthai.up.railway.app/api/auth/google/callback"
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    console.log('Google OAuth profile:', {
-      id: profile.id,
-      email: profile.emails?.[0]?.value,
-      name: profile.displayName
-    });
-
-    // Check if user exists with this Google ID
-    let user = await db.get('SELECT * FROM users WHERE google_id = ?', [profile.id]);
-    
-    if (!user) {
-      // Check if user exists with this email
-      const email = profile.emails?.[0]?.value;
-      if (email) {
-        user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
-        if (user) {
-          // Link Google account to existing user (handle schema gracefully)
-          try {
-            await db.run(
-              'UPDATE users SET google_id = ?, auth_method = ? WHERE id = ?',
-              [profile.id, 'google', user.id]
-            );
-          } catch (error) {
-            if (error.message.includes('no such column')) {
-              // Old schema - just update google_id if column exists
-              try {
-                await db.run(
-                  'UPDATE users SET google_id = ? WHERE id = ?',
-                  [profile.id, user.id]
-                );
-              } catch (innerError) {
-                console.log('Cannot update google_id - old schema without multi-auth support');
-              }
-            } else {
-              throw error;
-            }
-          }
-          user.google_id = profile.id;
-          user.auth_method = 'google';
-        }
-      }
-    }
-
-    if (!user) {
-      // Create new user
-      let username = profile.displayName?.replace(/\s+/g, '') || `google_user_${profile.id}`;
-      const email = profile.emails?.[0]?.value;
-      
-      // Ensure username uniqueness across ALL auth methods
-      const originalUsername = username;
-      username = await ensureUsernameUnique(username);
-      
-      console.log(`🔐 Google OAuth username uniqueness: ${originalUsername} → ${username}`);
-      
-      // Create new user (handle schema gracefully)
-      let result;
-      try {
-        result = await db.run(
-          'INSERT INTO users (username, email, google_id, auth_method, is_admin) VALUES (?, ?, ?, ?, ?)',
-          [username, email, profile.id, 'google', false]
-        );
-      } catch (error) {
-        if (error.message.includes('no such column')) {
-          // Fallback to old schema
-          result = await db.run(
-            'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
-            [username, email, false]
-          );
-        } else {
-          throw error;
-        }
-      }
-      
-      user = {
-        id: result.id,
-        username,
-        email,
-        google_id: profile.id,
-        auth_method: 'google',
-        is_admin: false,
-        profile_photo: null
-      };
-
-      await logActivity(user.id, user.username, 'GOOGLE_REGISTER', 'Account created via Google OAuth');
-    } else {
-      await logActivity(user.id, user.username, 'GOOGLE_LOGIN', 'Logged in via Google OAuth');
-    }
-
-    return done(null, user);
-  } catch (error) {
-    console.error('Google OAuth error:', error);
-    return done(error, null);
-  }
-}));
-
-// Initialize Twilio client
-const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? 
-  twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
-
-// Initialize Email transporter (using Gmail SMTP)
-let emailTransporter = null;
-try {
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    emailTransporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,    // Your Gmail address
-        pass: process.env.EMAIL_PASS     // Your Gmail app password
-      }
-    });
-    console.log('📧 Email service configured with Gmail SMTP');
-    // Test email configuration (don't send, just verify)
-    emailTransporter.verify((error, success) => {
-      if (error) {
-        console.log('❌ Email configuration test failed:', error.message);
-        emailTransporter = null; // Disable email if config is bad
-      } else {
-        console.log('✅ Email service ready for sending');
-      }
-    });
-  } else {
-    console.log('⚠️  Email service not configured (EMAIL_USER/EMAIL_PASS missing)');
-  }
-} catch (emailConfigError) {
-  console.error('❌ Email configuration error:', emailConfigError.message);
-  emailTransporter = null;
-}
-
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -293,7 +107,7 @@ app.use(limiter);
 // Auth routes
 app.post('/api/register', [
   body('username').isLength({ min: 3 }).trim().escape(),
-  body('password').optional().isLength({ min: 6 }),
+  body('password').isLength({ min: 6 }),
   body('email').optional().isEmail().normalizeEmail()
 ], async (req, res) => {
   try {
@@ -309,56 +123,15 @@ app.post('/api/register', [
     if (existingUser) {
       return res.status(400).json({ error: 'Username already exists' });
     }
-    
-    // Final username uniqueness check (double protection across all auth methods)
-    const finalUsername = await ensureUsernameUnique(username);
-    if (finalUsername !== username) {
-      console.log(`🔐 Password registration final username adjustment: ${username} → ${finalUsername}`);
-      username = finalUsername;
-    }
 
-    // Hash password if provided
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user (admin role can be granted later via admin button)
-    let result;
-    try {
-      result = await db.run(
-        'INSERT INTO users (username, password, email, is_admin, auth_method) VALUES (?, ?, ?, ?, ?)',
-        [username, hashedPassword, email, false, password ? 'password' : 'other']
-      );
-    } catch (error) {
-      console.log('🔧 Password registration schema error, trying fallback:', error.message);
-      if (error.message.includes('no such column') || error.message.includes('auth_method')) {
-        // Try basic schema - might not have is_admin either
-        try {
-          result = await db.run(
-            'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, ?)',
-            [username, hashedPassword, email, false]
-          );
-          console.log('✅ Password registration fallback with is_admin successful');
-        } catch (fallbackError) {
-          console.log('🔧 Further password fallback needed:', fallbackError.message);
-          if (fallbackError.message.includes('NOT NULL constraint failed: users.password')) {
-            // This shouldn't happen for password registration, but just in case
-            result = await db.run(
-              'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-              [username, email, hashedPassword || 'password_auth']
-            );
-            console.log('✅ Basic password fallback successful');
-          } else {
-            // Most basic schema
-            result = await db.run(
-              'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
-              [username, hashedPassword, email]
-            );
-            console.log('✅ Most basic password fallback successful');
-          }
-        }
-      } else {
-        throw error;
-      }
-    }
+    const result = await db.run(
+      'INSERT INTO users (username, password, email, is_admin) VALUES (?, ?, ?, ?)',
+      [username, hashedPassword, email, false]
+    );
 
     // Generate token
     const token = jwt.sign(
@@ -399,11 +172,6 @@ app.post('/api/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check if user has a password (password-based auth)
-    if (!user.password) {
-      return res.status(401).json({ error: 'Please use Google or SMS authentication for this account' });
-    }
-
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -428,369 +196,6 @@ app.post('/api/login', [
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Google OAuth Routes
-app.get('/api/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-app.get('/api/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
-  async (req, res) => {
-    try {
-      console.log('🔍 Google OAuth callback reached!');
-      console.log('🔍 User from OAuth:', req.user ? 'User found' : 'No user');
-      console.log('🔍 Session info:', req.session ? 'Session exists' : 'No session');
-      // Generate JWT token for consistency with existing auth
-      const user = req.user;
-      const token = jwt.sign(
-        { userId: user.id, username: user.username, isAdmin: user.is_admin },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      // Redirect to frontend with token - detect based on host  
-      let redirectUrl;
-      const host = req.get('host') || 'localhost';
-      console.log('🌍 Request host:', host);
-      
-      if (host.includes('chanchinthai.up.railway.app')) {
-        redirectUrl = `https://chanchinthai.up.railway.app/?token=${token}`;
-      } else if (host.includes('web-staging-87ce.up.railway.app')) {
-        redirectUrl = `https://web-staging-87ce.up.railway.app/?token=${token}`;
-      } else if (host.includes('railway.app')) {
-        // Fallback for other Railway URLs - use the same host
-        redirectUrl = `https://${host}/?token=${token}`;
-      } else {
-        redirectUrl = `http://localhost:3000/?token=${token}`;
-      }
-      
-      console.log(`🔑 Google OAuth redirect:`, redirectUrl);
-      console.log(`🌍 Environment: NODE_ENV=${process.env.NODE_ENV}, RAILWAY_ENVIRONMENT=${process.env.RAILWAY_ENVIRONMENT}`);
-      
-      res.redirect(redirectUrl);
-    } catch (error) {
-      console.error('Google OAuth callback error:', error);
-      res.redirect('/login?error=oauth_error');
-    }
-  }
-);
-
-// Email OTP Routes (Free alternative to SMS)
-app.post('/api/auth/send-email-otp', [
-  body('email').isEmail().withMessage('Valid email address is required'),
-  body('mode').optional().isIn(['signin', 'signup']).withMessage('Mode must be signin or signup')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { email, mode } = req.body;
-    const normalizedEmail = email.toLowerCase().trim(); // Normalize email
-
-    // Check email existence based on mode
-    const existingEmailUser = await db.get('SELECT id, username FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
-    
-    if (mode === 'signup' && existingEmailUser) {
-      return res.status(400).json({ 
-        error: 'An account with this email already exists. Please use "Sign In" to access your existing account.',
-        existingAccount: true
-      });
-    }
-    
-    if (mode === 'signin' && !existingEmailUser) {
-      return res.status(400).json({ 
-        error: 'No account found with this email. Please use "Sign Up" to create a new account.',
-        needsSignup: true
-      });
-    }
-    
-    // For signup mode, also check username uniqueness if provided
-    if (mode === 'signup' && req.body.username) {
-      const username = req.body.username.trim();
-      console.log(`🔍 Send OTP: Checking username uniqueness for signup: "${username}"`);
-      const existingUsernameUser = await db.get('SELECT id, username FROM users WHERE username = ?', [username]);
-      if (existingUsernameUser) {
-        console.log(`🚫 Send OTP: Blocking duplicate username: "${username}" (ID: ${existingUsernameUser.id})`);
-        return res.status(400).json({ 
-          error: 'Username already exists. Please choose a different username.',
-          duplicateUsername: true
-        });
-      }
-      console.log(`✅ Send OTP: Username "${username}" is available`);
-    }
-
-    // Generate 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Clear existing OTPs for this email
-    await db.run('DELETE FROM email_otp WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
-
-    // Store OTP in database
-    await db.run(
-      'INSERT INTO email_otp (email, otp_code, expires_at) VALUES (?, ?, ?)',
-      [normalizedEmail, otpCode, expiresAt.toISOString()]
-    );
-
-    // Send actual email
-    try {
-      console.log(`✅ Email OTP for ${normalizedEmail}: ${otpCode}`);
-      console.log(`🕒 Expires at: ${expiresAt.toISOString()}`);
-
-      // Send real email if email service is configured
-      if (emailTransporter) {
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: normalizedEmail,
-          subject: '🐰 Your Constipation Tracker Verification Code',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #10b981;">🐰 Constipation Tracker</h1>
-                <h2 style="color: #374151;">Verification Code</h2>
-              </div>
-              
-              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-                <h1 style="color: #1f2937; font-size: 36px; letter-spacing: 8px; margin: 0;">${otpCode}</h1>
-                <p style="color: #6b7280; margin-top: 10px;">Your verification code</p>
-              </div>
-              
-              <div style="color: #374151; line-height: 1.6;">
-                <p>Hi there! 👋</p>
-                <p>You requested a verification code to sign in to your Constipation Tracker account.</p>
-                <p><strong>Your verification code is: ${otpCode}</strong></p>
-                <p>This code will expire in <strong>5 minutes</strong> for security reasons.</p>
-                <p>If you didn't request this code, you can safely ignore this email.</p>
-              </div>
-              
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-              <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-                This email was sent from your Constipation Tracker application.<br>
-                Please do not reply to this email.
-              </p>
-            </div>
-          `
-        };
-
-        const result = await emailTransporter.sendMail(mailOptions);
-        console.log(`📧 Email sent successfully to ${email}`);
-        console.log(`📧 Email result:`, result.messageId ? 'Message ID: ' + result.messageId : 'No message ID');
-        
-        res.json({ 
-          message: 'Verification code sent to your email',
-          // Still show OTP in development for backup testing
-          ...(process.env.NODE_ENV !== 'production' && { 
-            otp: otpCode,
-            debug: 'Email sent! Check your inbox and spam folder'
-          })
-        });
-      } else {
-        // Fallback to console logging if email not configured
-        console.log('⚠️  Email service not configured, using console logging');
-        res.json({ 
-          message: 'Email service not configured - check console logs',
-          otp: otpCode,
-          debug: 'Configure EMAIL_USER and EMAIL_PASS environment variables for real email sending'
-        });
-      }
-      
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      res.status(500).json({ 
-        error: 'Failed to send verification email. Please try again.',
-        debug: process.env.NODE_ENV !== 'production' ? emailError.message : undefined
-      });
-    }
-
-  } catch (error) {
-    console.error('Send email OTP error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/auth/verify-email-otp', [
-  body('email').isEmail().withMessage('Valid email address is required'),
-  body('otp_code').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
-  body('username').optional().isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { email, otp_code, username } = req.body;
-    const normalizedEmail = email.toLowerCase().trim(); // Normalize email
-
-    // Get OTP record (case-insensitive email)
-    const otpRecord = await db.get(
-      'SELECT * FROM email_otp WHERE LOWER(email) = LOWER(?) AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
-      [normalizedEmail]
-    );
-
-    if (!otpRecord) {
-      return res.status(400).json({ error: 'No valid OTP found for this email address' });
-    }
-
-    // Check if OTP is expired
-    if (new Date() > new Date(otpRecord.expires_at)) {
-      return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
-    }
-
-    // Check attempts
-    if (otpRecord.attempts >= 3) {
-      return res.status(400).json({ error: 'Too many failed attempts. Please request a new OTP.' });
-    }
-
-    // Verify OTP
-    if (otpRecord.otp_code !== otp_code) {
-      // Increment attempts
-      await db.run(
-        'UPDATE email_otp SET attempts = attempts + 1 WHERE id = ?',
-        [otpRecord.id]
-      );
-      return res.status(400).json({ error: 'Invalid OTP code' });
-    }
-
-    // Mark OTP as verified
-    await db.run(
-      'UPDATE email_otp SET verified = TRUE WHERE id = ?',
-      [otpRecord.id]
-    );
-
-    // Check if user exists with this email (case-insensitive)
-    let user = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
-
-    if (!user) {
-      // No user found with this email
-      if (!username || username.trim() === '') {
-        return res.status(400).json({ 
-          error: 'No account found with this email. Please use the Sign Up mode to create a new account.',
-          requireSignUp: true
-        });
-      }
-
-      // Create new user (sign up mode)
-      console.log(`🔍 Checking username uniqueness: "${username}"`);
-      const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
-      console.log(`🔍 Existing user found:`, existingUser ? `Yes (ID: ${existingUser.id})` : 'No');
-      if (existingUser) {
-        console.log(`🚫 Blocking duplicate username: "${username}"`);
-        return res.status(400).json({ error: 'Username already exists. Please choose a different username.' });
-      }
-      
-      // Check email uniqueness (this email should already be checked above, but double-check)
-      const existingEmailUser = await db.get('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
-      if (existingEmailUser) {
-        return res.status(400).json({ error: 'An account with this email already exists. Please use Sign In instead.' });
-      }
-
-      // Final username uniqueness check (double protection)
-      const finalUsername = await ensureUsernameUnique(username);
-      if (finalUsername !== username) {
-        console.log(`🔐 Email OTP final username adjustment: ${username} → ${finalUsername}`);
-        username = finalUsername;
-      }
-
-      // Try with new schema first, fallback to old schema
-      let result;
-      try {
-        result = await db.run(
-          'INSERT INTO users (username, email, auth_method, is_admin) VALUES (?, ?, ?, ?)',
-          [username, normalizedEmail, 'email', false]
-        );
-      } catch (error) {
-        console.log('🔧 Schema error, trying fallback:', error.message);
-        if (error.message.includes('no such column') || error.message.includes('auth_method')) {
-          // Try basic schema - might not have is_admin either
-          try {
-            result = await db.run(
-              'INSERT INTO users (username, email, is_admin) VALUES (?, ?, ?)',
-              [username, normalizedEmail, false]
-            );
-            console.log('✅ Fallback with is_admin successful');
-          } catch (fallbackError) {
-            console.log('🔧 Further fallback needed:', fallbackError.message);
-            // Legacy schema with required password column
-            if (fallbackError.message.includes('NOT NULL constraint failed: users.password')) {
-              result = await db.run(
-                'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-                [username, normalizedEmail, 'email_auth'] // Placeholder password for email auth
-              );
-              console.log('✅ Legacy schema with password fallback successful');
-            } else {
-              // Even more basic schema
-              result = await db.run(
-                'INSERT INTO users (username, email) VALUES (?, ?)',
-                [username, normalizedEmail]
-              );
-              console.log('✅ Basic fallback successful');
-            }
-          }
-        } else {
-          throw error;
-        }
-      }
-
-      user = {
-        id: result.id,
-        username,
-        email: normalizedEmail,
-        auth_method: 'email',
-        is_admin: false, // Default for new users
-        profile_photo: null
-      };
-
-      console.log('✅ New user created:', { id: user.id, username: user.username, email: user.email });
-      await logActivity(user.id, user.username, 'EMAIL_REGISTER', 'Account created via Email OTP');
-    } else {
-      // Existing user login - no username required
-      console.log('✅ Existing user login:', { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin });
-      await logActivity(user.id, user.username, 'EMAIL_LOGIN', 'Logged in via Email OTP');
-    }
-
-    // Generate JWT token (handle missing is_admin for legacy schemas)
-    const isAdmin = user.is_admin || false;
-    const token = jwt.sign(
-      { userId: user.id, username: user.username, isAdmin: isAdmin },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    const responseUser = { 
-      id: user.id, 
-      username: user.username, 
-      email: user.email, 
-      profile_photo: user.profile_photo || null, 
-      is_admin: isAdmin
-    };
-    
-    console.log('📤 Sending user data to frontend:', responseUser);
-    
-    res.json({
-      message: 'Email verification successful',
-      token,
-      user: responseUser
-    });
-
-  } catch (error) {
-    console.error('Verify Email OTP error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Debug endpoint to check user emails (temporary)
-app.get('/api/debug/users', async (req, res) => {
-  try {
-    const users = await db.all('SELECT id, username, email, auth_method FROM users');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1784,11 +1189,11 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
 
     console.log('🎯 Question type detected:', isHealthRelated ? 'Health-related' : 'General knowledge');
 
-    // Create adaptive prompt for DeepSeek
+    // Create personalized prompt for DeepSeek based on question type
     let personalizedPrompt;
     
     if (isHealthRelated) {
-      // Health-focused prompt with data context
+      // Health-focused prompt with health data
       personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their health question.
 
 ${healthContext}
@@ -1799,23 +1204,22 @@ Instructions:
 - Give personalized advice based on their actual health data shown above
 - Be warm, supportive, and encouraging
 - Reference specific patterns you see in their data when relevant
-- Keep response concise (2-3 sentences max) 
+- Keep response concise (2-3 sentences max)
 - Always remind them to consult a doctor for medical concerns
 - Use supportive emojis appropriately`;
     } else {
       // General knowledge prompt without health constraints
-      personalizedPrompt = `You are a knowledgeable and friendly assistant for ${user?.username || 'the user'}. Provide a helpful, informative response to their question.
+      personalizedPrompt = `You are a knowledgeable and helpful assistant for ${user?.username || 'the user'}. Provide a comprehensive, informative response to their question.
 
 User's Question: ${message}
 
 Instructions:
-- Provide comprehensive, detailed information as appropriate for the question
-- Be engaging, informative, and personable
-- Adjust response length to match the complexity and depth needed for the topic
-- For educational topics (history, science, cooking, etc.), provide thorough explanations
-- For simple questions, keep responses concise
-- Maintain a warm, helpful tone with ${user?.username || 'the user'}'s name
-- Use appropriate emojis to enhance engagement`;
+- Provide detailed, thorough information appropriate for the topic
+- Be engaging, informative, and helpful
+- For educational topics (history, science, cooking, etc.), give comprehensive explanations
+- Maintain a friendly, personable tone
+- Use ${user?.username || 'the user'}'s name when appropriate
+- Use emojis to enhance engagement`;
     }
 
     // Call DeepSeek API
@@ -1840,7 +1244,7 @@ Instructions:
           content: personalizedPrompt
         }
       ],
-      max_tokens: isHealthRelated ? 300 : 500,
+      max_tokens: isHealthRelated ? 300 : 600,
       temperature: 0.7
     }, {
       headers: {
@@ -1862,11 +1266,10 @@ Instructions:
 
   } catch (error) {
     console.error('ASK AI error:', error);
-    console.log('🔄 Question type was:', isHealthRelated ? 'Health-related' : 'General knowledge');
     
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       return res.json({
-        response: "I'm having trouble connecting right now. Please try again in a moment! 🤖",
+        response: "I'm having trouble connecting to the AI service right now. Please try again in a moment! 🤖",
         timestamp: new Date().toISOString()
       });
     }
@@ -1878,13 +1281,9 @@ Instructions:
       });
     }
 
-    // Simple fallback based on question type
-    const fallbackResponse = isHealthRelated 
-      ? "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙"
-      : `Hi ${user?.username || 'there'}! I'm having trouble responding right now. Please try again later! 💙`;
-
+    // Fallback response
     res.json({
-      response: fallbackResponse,
+      response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
       timestamp: new Date().toISOString()
     });
   }
