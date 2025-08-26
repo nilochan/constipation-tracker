@@ -414,7 +414,8 @@ app.get('/api/auth/google/callback',
 
 // Email OTP Routes (Free alternative to SMS)
 app.post('/api/auth/send-email-otp', [
-  body('email').isEmail().withMessage('Valid email address is required')
+  body('email').isEmail().withMessage('Valid email address is required'),
+  body('mode').optional().isIn(['signin', 'signup']).withMessage('Mode must be signin or signup')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -422,8 +423,25 @@ app.post('/api/auth/send-email-otp', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email } = req.body;
+    const { email, mode } = req.body;
     const normalizedEmail = email.toLowerCase().trim(); // Normalize email
+
+    // Check email existence based on mode
+    const existingEmailUser = await db.get('SELECT id, username FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
+    
+    if (mode === 'signup' && existingEmailUser) {
+      return res.status(400).json({ 
+        error: 'An account with this email already exists. Please use "Sign In" to access your existing account.',
+        existingAccount: true
+      });
+    }
+    
+    if (mode === 'signin' && !existingEmailUser) {
+      return res.status(400).json({ 
+        error: 'No account found with this email. Please use "Sign Up" to create a new account.',
+        needsSignup: true
+      });
+    }
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();

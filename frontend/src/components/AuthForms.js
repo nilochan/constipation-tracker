@@ -96,7 +96,10 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
       const response = await fetch('/api/auth/send-email-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email })
+        body: JSON.stringify({ 
+          email: formData.email,
+          mode: isLoginMode ? 'signin' : 'signup'
+        })
       });
 
       const data = await response.json();
@@ -110,7 +113,17 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
           });
         }
       } else {
-        setErrors({ email: data.error || 'Failed to send verification code' });
+        if (data.existingAccount) {
+          // Switch to sign in mode if account exists
+          setIsLoginMode(true);
+          setErrors({ general: data.error });
+        } else if (data.needsSignup) {
+          // Switch to sign up mode if no account found
+          setIsLoginMode(false);
+          setErrors({ general: data.error });
+        } else {
+          setErrors({ email: data.error || 'Failed to send verification code' });
+        }
       }
     } catch (error) {
       setErrors({ email: 'Network error. Please try again.' });
