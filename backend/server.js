@@ -661,8 +661,11 @@ app.post('/api/auth/verify-email-otp', [
       }
 
       // Create new user (sign up mode)
+      console.log(`🔍 Checking username uniqueness: "${username}"`);
       const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+      console.log(`🔍 Existing user found:`, existingUser ? `Yes (ID: ${existingUser.id})` : 'No');
       if (existingUser) {
+        console.log(`🚫 Blocking duplicate username: "${username}"`);
         return res.status(400).json({ error: 'Username already exists. Please choose a different username.' });
       }
       

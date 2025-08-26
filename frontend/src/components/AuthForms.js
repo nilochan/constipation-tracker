@@ -410,9 +410,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                     {errors.username && (
                       <p className="text-red-500 text-sm mt-1">{errors.username}</p>
                     )}
-                    <p className="text-gray-500 text-xs mt-1">
-                      📝 Your username will identify you in the system and must be unique.
-                    </p>
                   </div>
                 )}
 
@@ -456,33 +453,6 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                   )}
                 </div>
 
-                {!isLoginMode && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Username
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                      <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.username ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="Choose a username (e.g., MyName123)"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    {errors.username && (
-                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
-                    )}
-                    <p className="text-gray-500 text-xs mt-1">
-                      Choose a unique username for your new account.
-                    </p>
-                  </div>
-                )}
 
                 <div className="flex space-x-3">
                   <button
