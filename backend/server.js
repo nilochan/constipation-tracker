@@ -1226,7 +1226,7 @@ Instructions:
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 20000
     });
 
     const aiResponse = deepseekResponse.data.choices[0].message.content;
