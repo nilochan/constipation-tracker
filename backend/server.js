@@ -1776,20 +1776,47 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
       healthContext += '\n';
     }
 
-    // Create personalized prompt for DeepSeek
-    const personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their question.
+    // Detect if question is health-related
+    const healthKeywords = ['health', 'constipation', 'bowel', 'mood', 'water', 'feel', 'symptom', 'pain', 'digest', 'stomach', 'wellness', 'sleep', 'stress', 'tired', 'energy', 'diet', 'food', 'bloat', 'nausea', 'fatigue', 'movement'];
+    const isHealthRelated = healthKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+
+    console.log('🎯 Question type detected:', isHealthRelated ? 'Health-related' : 'General knowledge');
+
+    // Create adaptive prompt for DeepSeek
+    let personalizedPrompt;
+    
+    if (isHealthRelated) {
+      // Health-focused prompt with data context
+      personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their health question.
 
 ${healthContext}
 
-User's Question: ${message}
+User's Health Question: ${message}
 
 Instructions:
 - Give personalized advice based on their actual health data shown above
 - Be warm, supportive, and encouraging
 - Reference specific patterns you see in their data when relevant
-- Keep response concise (2-3 sentences max)
+- Keep response concise (2-3 sentences max) 
 - Always remind them to consult a doctor for medical concerns
 - Use supportive emojis appropriately`;
+    } else {
+      // General knowledge prompt without health constraints
+      personalizedPrompt = `You are a knowledgeable and friendly assistant for ${user?.username || 'the user'}. Provide a helpful, informative response to their question.
+
+User's Question: ${message}
+
+Instructions:
+- Provide comprehensive, detailed information as appropriate for the question
+- Be engaging, informative, and personable
+- Adjust response length to match the complexity and depth needed for the topic
+- For educational topics (history, science, cooking, etc.), provide thorough explanations
+- For simple questions, keep responses concise
+- Maintain a warm, helpful tone with ${user?.username || 'the user'}'s name
+- Use appropriate emojis to enhance engagement`;
+    }
 
     // Call DeepSeek API
     const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
