@@ -401,6 +401,32 @@ const AuthForms = ({ onLogin, onRegister, isLoading }) => {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        errors.username ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter your username (e.g., Nilo)"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  {errors.username && (
+                    <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+                  )}
+                  <p className="text-gray-500 text-xs mt-1">
+                    To create a new account, enter a new username. To link email to your existing account, enter your existing username.
+                  </p>
+                </div>
+
                 <div className="flex space-x-3">
                   <button
                     onClick={handleVerifyOtp}
