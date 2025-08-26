@@ -157,6 +157,18 @@ const ConstipationReliefTracker = () => {
     const checkAuth = async () => {
       try {
         if (ApiService.isAuthenticated()) {
+          // Load user data from localStorage if available
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const userData = JSON.parse(storedUser);
+              setUser(userData);
+              setProfileData(userData);
+              console.log('👤 Loaded user from localStorage:', userData);
+            } catch (parseError) {
+              console.error('Failed to parse stored user data:', parseError);
+            }
+          }
           setIsAuthenticated(true);
         }
       } catch (error) {
