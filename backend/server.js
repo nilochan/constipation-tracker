@@ -1242,9 +1242,10 @@ Instructions:
   } catch (error) {
     console.error('ASK AI error:', error);
     
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ECONNRESET' || error.message.includes('timeout') || error.message.includes('aborted')) {
+      console.log('🔄 Connection issue detected - likely complex question or content filtering');
       return res.json({
-        response: "I'm having trouble connecting to the AI service right now. Please try again in a moment! 🤖",
+        response: `Hi ${user?.username || 'there'}! I'm having trouble processing that complex question right now. Could you try rephrasing it or asking a simpler version? 🤖`,
         timestamp: new Date().toISOString()
       });
     }
