@@ -1181,24 +1181,12 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
       healthContext += '\n';
     }
 
-    // Detect if question is health-related
-    const healthKeywords = ['health', 'constipation', 'bowel', 'mood', 'water', 'feel', 'symptom', 'pain', 'digest', 'stomach', 'wellness', 'sleep', 'stress', 'tired', 'energy', 'diet', 'food', 'bloat', 'nausea', 'fatigue', 'movement'];
-    const isHealthRelated = healthKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-
-    console.log('🎯 Question type detected:', isHealthRelated ? 'Health-related' : 'General knowledge');
-
-    // Create personalized prompt for DeepSeek based on question type
-    let personalizedPrompt;
-    
-    if (isHealthRelated) {
-      // Health-focused prompt with health data
-      personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their health question.
+    // Create personalized prompt for DeepSeek
+    const personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their question.
 
 ${healthContext}
 
-User's Health Question: ${message}
+User's Question: ${message}
 
 Instructions:
 - Give personalized advice based on their actual health data shown above
@@ -1207,20 +1195,6 @@ Instructions:
 - Keep response concise (2-3 sentences max)
 - Always remind them to consult a doctor for medical concerns
 - Use supportive emojis appropriately`;
-    } else {
-      // General knowledge prompt without health constraints
-      personalizedPrompt = `You are a knowledgeable and helpful assistant for ${user?.username || 'the user'}. Provide a comprehensive, informative response to their question.
-
-User's Question: ${message}
-
-Instructions:
-- Provide detailed, thorough information appropriate for the topic
-- Be engaging, informative, and helpful
-- For educational topics (history, science, cooking, etc.), give comprehensive explanations
-- Maintain a friendly, personable tone
-- Use ${user?.username || 'the user'}'s name when appropriate
-- Use emojis to enhance engagement`;
-    }
 
     // Call DeepSeek API
     const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
@@ -1244,7 +1218,7 @@ Instructions:
           content: personalizedPrompt
         }
       ],
-      max_tokens: isHealthRelated ? 300 : 600,
+      max_tokens: 300,
       temperature: 0.7
     }, {
       headers: {
@@ -1266,21 +1240,8 @@ Instructions:
 
   } catch (error) {
     console.error('ASK AI error:', error);
-    console.log('🔍 Error details:', {
-      code: error.code,
-      message: error.message,
-      aborted: error.response?.req?.aborted,
-      status: error.response?.status
-    });
     
-    // Check for connection issues (including aborted connections)
-    if (error.code === 'ECONNABORTED' || 
-        error.code === 'ECONNRESET' ||
-        error.message.includes('timeout') || 
-        error.message.includes('aborted') ||
-        error.response?.req?.aborted) {
-      
-      console.log('🔄 Connection issue detected, using fallback');
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       return res.json({
         response: "I'm having trouble connecting to the AI service right now. Please try again in a moment! 🤖",
         timestamp: new Date().toISOString()
@@ -1294,15 +1255,9 @@ Instructions:
       });
     }
 
-    // Enhanced fallback based on detected question type
-    console.log('🔄 Using enhanced fallback for question type:', isHealthRelated ? 'Health-related' : 'General knowledge');
-    
-    const fallbackResponse = isHealthRelated 
-      ? "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙"
-      : `Hi ${user?.username || 'there'}! I'm having trouble getting detailed information right now, but I'd love to help answer your question about "${message}". Please try again in a moment! 🤖`;
-
+    // Fallback response
     res.json({
-      response: fallbackResponse,
+      response: "I'm here to help with your health questions! Try asking about hydration, digestive health, or wellness tips. For specific medical concerns, please consult your doctor. 💙",
       timestamp: new Date().toISOString()
     });
   }
