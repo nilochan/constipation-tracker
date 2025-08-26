@@ -1182,17 +1182,18 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
     }
 
     // Create personalized prompt for DeepSeek
-    const personalizedPrompt = `You are a helpful and knowledgeable assistant for ${user?.username || 'the user'}. You can answer questions about health, general knowledge, education, and many other topics.
+    const personalizedPrompt = `You are a caring health assistant for ${user?.username || 'the user'}. Based on their recent health data, provide a personalized, supportive response to their question.
 
-${healthContext.trim() ? healthContext + '\n' : ''}User's Question: ${message}
+${healthContext}
+
+User's Question: ${message}
 
 Instructions:
-- If the question is health-related and you have health data above, provide personalized health advice based on their actual data
-- If the question is about general topics (history, science, cooking, etc.), provide comprehensive, informative answers
-- Be warm, supportive, and helpful in all responses
-- For health questions, keep responses concise (2-3 sentences) and remind them to consult a doctor for medical concerns
-- For general questions, provide detailed, educational responses as appropriate
-- Use ${user?.username || 'the user'}'s name when appropriate
+- Give personalized advice based on their actual health data shown above
+- Be warm, supportive, and encouraging
+- Reference specific patterns you see in their data when relevant
+- Keep response concise (2-3 sentences max)
+- Always remind them to consult a doctor for medical concerns
 - Use supportive emojis appropriately`;
 
     // Call DeepSeek API
@@ -1217,7 +1218,7 @@ Instructions:
           content: personalizedPrompt
         }
       ],
-      max_tokens: 500,
+      max_tokens: 300,
       temperature: 0.7
     }, {
       headers: {
