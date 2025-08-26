@@ -28,6 +28,25 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Global username uniqueness checker
+const ensureUsernameUnique = async (desiredUsername) => {
+  let username = desiredUsername;
+  let counter = 1;
+  let existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+  
+  while (existingUser) {
+    username = `${desiredUsername}${counter}`;
+    counter++;
+    existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+    if (counter > 100) { // Prevent infinite loop
+      username = `${desiredUsername}_${Date.now()}`;
+      break;
+    }
+  }
+  
+  return username;
+};
+
 // Activity logging function
 const logActivity = async (userId, username, action, details = null, req = null) => {
   try {
@@ -181,8 +200,14 @@ passport.use(new GoogleStrategy({
 
     if (!user) {
       // Create new user
-      const username = profile.displayName?.replace(/\s+/g, '') || `google_user_${profile.id}`;
+      let username = profile.displayName?.replace(/\s+/g, '') || `google_user_${profile.id}`;
       const email = profile.emails?.[0]?.value;
+      
+      // Ensure username uniqueness across ALL auth methods
+      const originalUsername = username;
+      username = await ensureUsernameUnique(username);
+      
+      console.log(`🔐 Google OAuth username uniqueness: ${originalUsername} → ${username}`);
       
       // Create new user (handle schema gracefully)
       let result;
@@ -283,6 +308,13 @@ app.post('/api/register', [
     const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
     if (existingUser) {
       return res.status(400).json({ error: 'Username already exists' });
+    }
+    
+    // Final username uniqueness check (double protection across all auth methods)
+    const finalUsername = await ensureUsernameUnique(username);
+    if (finalUsername !== username) {
+      console.log(`🔐 Password registration final username adjustment: ${username} → ${finalUsername}`);
+      username = finalUsername;
     }
 
     // Hash password if provided
@@ -604,6 +636,13 @@ app.post('/api/auth/verify-email-otp', [
       const existingEmailUser = await db.get('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
       if (existingEmailUser) {
         return res.status(400).json({ error: 'An account with this email already exists. Please use Sign In instead.' });
+      }
+
+      // Final username uniqueness check (double protection)
+      const finalUsername = await ensureUsernameUnique(username);
+      if (finalUsername !== username) {
+        console.log(`🔐 Email OTP final username adjustment: ${username} → ${finalUsername}`);
+        username = finalUsername;
       }
 
       // Try with new schema first, fallback to old schema
