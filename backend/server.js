@@ -659,6 +659,7 @@ app.post('/api/auth/verify-email-otp', [
       await logActivity(user.id, user.username, 'EMAIL_REGISTER', 'Account created via Email OTP');
     } else {
       // Existing user login - no username required
+      console.log('✅ Existing user login:', { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin });
       await logActivity(user.id, user.username, 'EMAIL_LOGIN', 'Logged in via Email OTP');
     }
 
@@ -670,16 +671,20 @@ app.post('/api/auth/verify-email-otp', [
       { expiresIn: '7d' }
     );
 
+    const responseUser = { 
+      id: user.id, 
+      username: user.username, 
+      email: user.email, 
+      profile_photo: user.profile_photo || null, 
+      is_admin: isAdmin
+    };
+    
+    console.log('📤 Sending user data to frontend:', responseUser);
+    
     res.json({
       message: 'Email verification successful',
       token,
-      user: { 
-        id: user.id, 
-        username: user.username, 
-        email: user.email, 
-        profile_photo: user.profile_photo || null, 
-        is_admin: isAdmin
-      }
+      user: responseUser
     });
 
   } catch (error) {
