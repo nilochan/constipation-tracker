@@ -581,6 +581,12 @@ app.post('/api/auth/verify-email-otp', [
       if (existingUser) {
         return res.status(400).json({ error: 'Username already exists. Please choose a different username.' });
       }
+      
+      // Check email uniqueness (this email should already be checked above, but double-check)
+      const existingEmailUser = await db.get('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
+      if (existingEmailUser) {
+        return res.status(400).json({ error: 'An account with this email already exists. Please use Sign In instead.' });
+      }
 
       // Try with new schema first, fallback to old schema
       let result;
@@ -627,19 +633,21 @@ app.post('/api/auth/verify-email-otp', [
         username,
         email: normalizedEmail,
         auth_method: 'email',
-        is_admin: false,
+        is_admin: false, // Default for new users
         profile_photo: null
       };
 
+      console.log('✅ New user created:', { id: user.id, username: user.username, email: user.email });
       await logActivity(user.id, user.username, 'EMAIL_REGISTER', 'Account created via Email OTP');
     } else {
       // Existing user login - no username required
       await logActivity(user.id, user.username, 'EMAIL_LOGIN', 'Logged in via Email OTP');
     }
 
-    // Generate JWT token
+    // Generate JWT token (handle missing is_admin for legacy schemas)
+    const isAdmin = user.is_admin || false;
     const token = jwt.sign(
-      { userId: user.id, username: user.username, isAdmin: user.is_admin },
+      { userId: user.id, username: user.username, isAdmin: isAdmin },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -651,8 +659,8 @@ app.post('/api/auth/verify-email-otp', [
         id: user.id, 
         username: user.username, 
         email: user.email, 
-        profile_photo: user.profile_photo, 
-        is_admin: user.is_admin 
+        profile_photo: user.profile_photo || null, 
+        is_admin: isAdmin
       }
     });
 
