@@ -25,6 +25,7 @@ const ConstipationReliefTracker = () => {
   const [chatHistoryStatus, setChatHistoryStatus] = useState('');
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminData, setAdminData] = useState({ logs: [], users: [], database: null, loading: false });
+  const [selectedUser, setSelectedUser] = useState('all'); // User filter state
   const [showAdminPromote, setShowAdminPromote] = useState(false);
   const [adminSecret, setAdminSecret] = useState('');
   const [aiSummary, setAiSummary] = useState({ daily: '', weekly: '', loading: false });
@@ -2765,11 +2766,80 @@ const ConstipationReliefTracker = () => {
                   </div>
                 </div>
               )}
+
+              {/* User Filter Dropdown */}
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-4 mb-6 border border-indigo-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm">🔍</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-800">User Filter</h3>
+                      <p className="text-sm text-gray-600">Filter data by specific user or view all users</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedUser}
+                      onChange={(e) => setSelectedUser(e.target.value)}
+                      className="bg-white border border-indigo-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    >
+                      <option value="all">👥 All Users</option>
+                      {adminData.users
+                        .sort((a, b) => a.username.localeCompare(b.username))
+                        .map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.is_admin ? '👑' : '👤'} {user.username} {user.is_admin ? '(Admin)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                    {selectedUser !== 'all' && (
+                      <button
+                        onClick={() => setSelectedUser('all')}
+                        className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                        title="Clear filter"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {selectedUser !== 'all' && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-indigo-100">
+                    {(() => {
+                      const user = adminData.users.find(u => u.id.toString() === selectedUser.toString());
+                      return user ? (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium text-gray-800">
+                              {user.is_admin ? '👑' : '👤'} {user.username}
+                            </span>
+                            <span className="text-sm text-gray-600 ml-2">
+                              {user.days_tracked} days tracked • {user.total_bowel_movements} BMs • {user.total_notes} notes
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            Last active: {user.last_activity ? new Date(user.last_activity).toLocaleDateString('en-US', { timeZone: 'Asia/Singapore' }) : 'Never'}
+                          </span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* User Stats */}
                 <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">👥 User Statistics</h3>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                    👥 User Statistics
+                    {selectedUser !== 'all' && (
+                      <span className="text-sm font-normal text-indigo-600 ml-2">
+                        (Filtered: {adminData.users.find(u => u.id.toString() === selectedUser.toString())?.username || 'Unknown'})
+                      </span>
+                    )}
+                  </h3>
                   {adminData.loading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
@@ -2777,7 +2847,9 @@ const ConstipationReliefTracker = () => {
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {adminData.users.map(user => (
+                      {adminData.users
+                        .filter(user => selectedUser === 'all' || user.id.toString() === selectedUser.toString())
+                        .map(user => (
                         <div key={user.id} className="bg-white rounded p-3 border">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -2802,7 +2874,14 @@ const ConstipationReliefTracker = () => {
 
                 {/* Activity Logs */}
                 <div className="bg-yellow-50 rounded-lg p-4">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">📋 Activity Logs</h3>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                    📋 Activity Logs
+                    {selectedUser !== 'all' && (
+                      <span className="text-sm font-normal text-indigo-600 ml-2">
+                        (Filtered: {adminData.logs.filter(log => log.user_id.toString() === selectedUser.toString()).length} logs)
+                      </span>
+                    )}
+                  </h3>
                   {adminData.loading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full mx-auto"></div>
@@ -2810,7 +2889,9 @@ const ConstipationReliefTracker = () => {
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {adminData.logs.map(log => (
+                      {adminData.logs
+                        .filter(log => selectedUser === 'all' || log.user_id.toString() === selectedUser.toString())
+                        .map(log => (
                         <div key={log.id} className="bg-white rounded p-3 border text-xs">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium text-gray-800">{log.username}</span>
