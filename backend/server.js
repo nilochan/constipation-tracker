@@ -25,16 +25,39 @@ const requireAdmin = (req, res, next) => {
 
 // Activity logging function
 const logActivity = async (userId, username, action, details = null, req = null) => {
+  console.log(`🔍 logActivity called: userId=${userId}, username=${username}, action=${action}`);
   try {
     const ipAddress = req ? (req.ip || req.connection.remoteAddress || 'Unknown') : 'System';
     const userAgent = req ? (req.get('User-Agent') || 'Unknown') : 'System';
     
-    await db.run(`
+    console.log(`📝 Attempting to log activity: ${username} (${userId}) - ${action} from ${ipAddress}`);
+    
+    const result = await db.run(`
       INSERT INTO activity_log (user_id, username, action, details, ip_address, user_agent)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [userId, username, action, details, ipAddress, userAgent]);
+    
+    console.log(`✅ Activity logged successfully: ID=${result.id}, Changes=${result.changes}`);
+    
+    // Verify the record was actually inserted
+    const verifyRecord = await db.get(`
+      SELECT * FROM activity_log WHERE id = ? 
+    `, [result.id]);
+    
+    if (verifyRecord) {
+      console.log(`✅ Verification: Record exists in database for ${username}`);
+    } else {
+      console.log(`❌ Verification FAILED: Record not found in database for ${username}`);
+    }
+    
   } catch (error) {
-    console.error('Failed to log activity:', error);
+    console.error(`❌ Failed to log activity for ${username} (${userId}):`, error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sql: error.sql
+    });
   }
 };
 
