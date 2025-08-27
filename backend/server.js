@@ -1647,6 +1647,79 @@ app.get('*', (req, res) => {
   }
 });
 
+// Diagnostic endpoint to check Pinko's database records (Admin only)
+app.get('/api/debug/pinko-records', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    console.log('🔍 Diagnostic: Checking Pinko records in database');
+    
+    // Check if Pinko user exists
+    const pinkoUser = await db.get('SELECT * FROM users WHERE username = ?', ['Pinko']);
+    
+    if (!pinkoUser) {
+      return res.json({ 
+        error: 'Pinko user not found in database',
+        diagnosis: 'User account does not exist'
+      });
+    }
+    
+    // Get ALL activity logs for Pinko directly from database
+    const pinkoActivities = await db.all(`
+      SELECT * FROM activity_log 
+      WHERE user_id = ? OR username = ?
+      ORDER BY created_at DESC
+    `, [pinkoUser.id, 'Pinko']);
+    
+    // Get recent activity logs (all users for comparison)
+    const recentLogs = await db.all(`
+      SELECT username, action, created_at, ip_address 
+      FROM activity_log 
+      WHERE created_at >= datetime('now', '-7 days')
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    
+    // Check what the admin dashboard query returns for Pinko
+    const dashboardQuery = await db.get(`
+      SELECT 
+        u.id,
+        u.username,
+        u.created_at,
+        MAX(al.created_at) as last_activity,
+        COUNT(al.id) as total_activities
+      FROM users u
+      LEFT JOIN activity_log al ON u.id = al.user_id
+      WHERE u.username = ?
+      GROUP BY u.id
+    `, ['Pinko']);
+    
+    res.json({
+      pinkoUser: {
+        id: pinkoUser.id,
+        username: pinkoUser.username,
+        created_at: pinkoUser.created_at,
+        email: pinkoUser.email
+      },
+      pinkoActivities: pinkoActivities,
+      totalPinkoActivities: pinkoActivities.length,
+      dashboardQuery: dashboardQuery,
+      recentLogsFromAllUsers: recentLogs,
+      diagnosis: {
+        userExists: !!pinkoUser,
+        hasActivities: pinkoActivities.length > 0,
+        lastActivity: pinkoActivities.length > 0 ? pinkoActivities[0].created_at : 'None',
+        possibleIssue: pinkoActivities.length === 0 ? 'No activity logs found for Pinko' : 'Activities exist but may not display correctly'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Pinko diagnostic error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check Pinko records',
+      details: error.message 
+    });
+  }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error(error);
